@@ -175,7 +175,3 @@ class Z80(Architecture):
 	def get_instruction_low_level_il(self, data, addr, il):
 		return None
 
-Z80.register()
-
-from ColecoView import ColecoView
-ColecoView.register()
