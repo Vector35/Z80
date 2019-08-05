@@ -5,6 +5,8 @@ from binaryninja.architecture import Architecture
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
 from binaryninja.enums import InstructionTextTokenType
 
+import skwrapper
+
 class Z80(Architecture):
 	name = 'Z80'
 
@@ -66,13 +68,17 @@ class Z80(Architecture):
 	stack_pointer = "SP"
 
 	def get_instruction_info(self, data, addr):
+		(instrTxt, instrLen) = skwrapper.disasm(data, addr)
+		if instrLen == 0:
+			return None
 		result = InstructionInfo()
-		result.length = 1
-		return result
+		result.length = instrLen
+		return result 
 
 	def get_instruction_text(self, data, addr):
-		tokens = [InstructionTextToken(InstructionTextTokenType.TextToken, "HELLO!")]
-		return tokens, 1
+		(instrTxt, instrLen) = skwrapper.disasm(data, addr)
+		tokens = [InstructionTextToken(InstructionTextTokenType.TextToken, instrTxt)]
+		return tokens, instrLen
 
 	def get_instruction_low_level_il(self, data, addr, il):
 		return None
