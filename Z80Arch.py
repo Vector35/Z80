@@ -131,7 +131,7 @@ class Z80(Architecture):
 			return None
 
 		result = []
-		atoms = [t for t in re.split(r'([, ()\+])', instrTxt) if t] # delimeters kept if in capture group
+		atoms = [t for t in re.split(r'([, ()\+-])', instrTxt) if t] # delimeters kept if in capture group
 		result.append(InstructionTextToken(InstructionTextTokenType.InstructionToken, atoms[0]))
 		if atoms[1:]:
 			result.append(InstructionTextToken(InstructionTextTokenType.TextToken, ' '))
@@ -163,12 +163,12 @@ class Z80(Architecture):
 				result.append(InstructionTextToken(InstructionTextTokenType.BeginMemoryOperandToken, atom))
 			elif atom == ')':
 				result.append(InstructionTextToken(InstructionTextTokenType.EndMemoryOperandToken, atom))
-			elif atom == '+':
+			elif atom in ['+', '-']:
 				result.append(InstructionTextToken(InstructionTextTokenType.TextToken, atom))
 			elif atom == ',':
 				result.append(InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, atom))
 			else:
-				raise Exception('unfamiliar token: %s from instruction %s' % (tok, instrTxt))
+				raise Exception('unfamiliar token: %s from %04X: %s' % (atom, addr, instrTxt))
 
 		return result, instrLen
 
