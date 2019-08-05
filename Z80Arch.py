@@ -84,11 +84,11 @@ class Z80(Architecture):
 
 		rccs = r'(?:C|NC|Z|NZ|M|P|PE|PO)'
 		regexes = [ \
-			r'^(?:JP|JR) '+rccs+r',\$(.*)$',	# 0: conditional jump			eg: JP PE,#DEAD
+			r'^(?:JP|JR) '+rccs+r',\$(.*)$',	# 0: conditional jump		eg: JP PE,#DEAD
 			r'^(?:JP|JR) \$(.*)$',				# 1: unconditional jump		eg: JP #DEAD
 			r'^(?:JP|JR) \((?:HL|IX|IY)\)$',	# 2: unconditional indirect	eg: JP (IX)
-			r'^DJNZ \$(.*)$',					# 3: dec, jump if not zero		eg: DJNZ #DEAD
-			r'^CALL '+rccs+r',\$(.*)$',			# 4: conditional call			eg: CALL PE,#DEAD
+			r'^DJNZ \$(.*)$',					# 3: dec, jump if not zero	eg: DJNZ #DEAD
+			r'^CALL '+rccs+r',\$(.*)$',			# 4: conditional call		eg: CALL PE,#DEAD
 			r'^CALL \$(.*)$',					# 5: unconditional call		eg: CALL #DEAD
 			r'^RET '+rccs+'$',					# 6: conditional return
 			r'^(?:RET|RETN|RETI)$',				# 7: return, return (nmi), return (interrupt)
@@ -123,7 +123,7 @@ class Z80(Architecture):
 
 			break
 
-		return result 
+		return result
 
 	def get_instruction_text(self, data, addr):
 		(instrTxt, instrLen) = skwrapper.disasm(data, addr)
@@ -173,5 +173,15 @@ class Z80(Architecture):
 		return result, instrLen
 
 	def get_instruction_low_level_il(self, data, addr, il):
-		return None
+		(instrTxt, instrLen) = skwrapper.disasm(data, addr)
+
+		if instrTxt.startswith('CALL'):
+			m = re.match(r'^.*\$(....)$', instrTxt)
+			il.append(il.call(il.const_pointer(2, int(m.group(1), 16))))
+		else:
+			#il.append(il.unimplemented())
+			#return None
+			il.append(il.nop())
+
+		return instrLen
 
