@@ -2,7 +2,8 @@
 
 from binaryninja.log import log_info
 from binaryninja.architecture import Architecture
-from binaryninja.function import RegisterInfo
+from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
+from binaryninja.enums import InstructionTextTokenType
 
 class Z80(Architecture):
 	name = 'Z80'
@@ -63,5 +64,17 @@ class Z80(Architecture):
 	}
 
 	stack_pointer = "SP"
+
+	def get_instruction_info(self, data, addr):
+		result = InstructionInfo()
+		result.length = 1
+		return result
+
+	def get_instruction_text(self, data, addr):
+		tokens = [InstructionTextToken(InstructionTextTokenType.TextToken, "HELLO!")]
+		return tokens, 1
+
+	def get_instruction_low_level_il(self, data, addr, il):
+		return None
 
 Z80.register()
