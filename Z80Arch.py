@@ -5,7 +5,7 @@ import re
 from binaryninja.log import log_info
 from binaryninja.architecture import Architecture
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
-from binaryninja.enums import InstructionTextTokenType
+from binaryninja.enums import InstructionTextTokenType, BranchType
 
 import skwrapper
 
@@ -81,6 +81,48 @@ class Z80(Architecture):
 			return None
 		result = InstructionInfo()
 		result.length = instrLen
+
+		rccs = r'(?:C|NC|Z|NZ|M|P|PE|PO)'
+		regexes = [ \
+			r'^(?:JP|JR) '+rccs+r',\$(.*)$',	# 0: conditional jump			eg: JP PE,#DEAD
+			r'^(?:JP|JR) \$(.*)$',				# 1: unconditional jump		eg: JP #DEAD
+			r'^(?:JP|JR) \((?:HL|IX|IY)\)$',	# 2: unconditional indirect	eg: JP (IX)
+			r'^DJNZ \$(.*)$',					# 3: dec, jump if not zero		eg: DJNZ #DEAD
+			r'^CALL '+rccs+r',\$(.*)$',			# 4: conditional call			eg: CALL PE,#DEAD
+			r'^CALL \$(.*)$',					# 5: unconditional call		eg: CALL #DEAD
+			r'^RET '+rccs+'$',					# 6: conditional return
+			r'^(?:RET|RETN|RETI)$',				# 7: return, return (nmi), return (interrupt)
+		]
+
+		m = None
+		for (i,regex) in enumerate(regexes):
+			m = re.match(regex, instrTxt)
+			if not m:
+				continue
+
+			if i==0 or i==3:
+				dest = int(m.group(1), 16)
+				result.add_branch(BranchType.TrueBranch, dest)
+				result.add_branch(BranchType.FalseBranch, addr + instrLen)
+				pass
+			elif i==1:
+				dest = int(m.group(1), 16)
+				result.add_branch(BranchType.UnconditionalBranch, dest)
+				pass
+			elif i==2:
+				result.add_branch(BranchType.IndirectBranch)
+				pass
+			elif i==4 or i==5:
+				dest = int(m.group(1), 16)
+				result.add_branch(BranchType.CallDestination, dest)
+				pass
+			elif i==6:
+				pass # conditional returns don't end block
+			elif i==7:
+				result.add_branch(BranchType.FunctionReturn)
+
+			break
+
 		return result 
 
 	def get_instruction_text(self, data, addr):
@@ -134,3 +176,6 @@ class Z80(Architecture):
 		return None
 
 Z80.register()
+
+from ColecoView import ColecoView
+ColecoView.register()
