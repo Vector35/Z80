@@ -174,13 +174,17 @@ class Z80(Architecture):
 
 	def get_instruction_low_level_il(self, data, addr, il):
 		(instrTxt, instrLen) = skwrapper.disasm(data, addr)
+		if instrLen == 0:
+			return None
 
 		if instrTxt.startswith('CALL'):
 			m = re.match(r'^.*\$(....)$', instrTxt)
 			il.append(il.call(il.const_pointer(2, int(m.group(1), 16))))
-		else:
-			#il.append(il.unimplemented())
-			#return None
+
+		elif instrTxt == 'RET':
+			il.append(il.ret(il.pop(2)))
+
+		else:#il.append(il.unimplemented())
 			il.append(il.nop())
 
 		return instrLen
