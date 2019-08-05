@@ -19,30 +19,31 @@ class ColecoView(BinaryView):
 		if (start_game & 0xF000) != 0x8000: return False
 		return True
 
+	# return {None, 'cartridge', 'system'}
 	@classmethod
-	def is_valid_for_data(self, data):
+	def get_rom_type(self, data):
 		# data is a binaryninja.binaryview.BinaryView
-		if len(data.read(0,16384)) == 16384:
-			if self.is_valid_cartridge_header(data.read(0, 12)):
-				print('detected ColecoVision cartridge ROM')
-				return True
 		if len(data.read(0,0xc000)) == 0xc000:
 			if self.is_valid_cartridge_header(data.read(0x8000, 12)):
 				if data.read(0, 16) == '\x31\xb9\x73\xc3\x6e\x00\xff\xff\xc3\x0c\x80\xff\xff\xff\xff\xc3':
 					print('detected ColecoVision system image')
-					return True
-		return False
+					return 'system'
+
+		if self.is_valid_cartridge_header(data.read(0, 12)):
+			print('detected ColecoVision cartridge ROM')
+			return 'cartridge'
+
+		return None
+
+	@classmethod
+	def is_valid_for_data(self, data):
+		return self.get_rom_type(data) in ['cartridge', 'system']
 
 	def __init__(self, data):
 		# data is a binaryninja.binaryview.BinaryView
 		BinaryView.__init__(self, parent_view = data, file_metadata = data.file)
 		self.data = data
-		if len(data.read(0,16384)) == 16384:
-			self.romType = 'cartridge'
-		elif len(data.read(0,0xc000)) == 0xc000:
-			self.romType == 'system'
-		else:
-			while 1: pass
+		self.romType = self.get_rom_type(data)
 
 	def init(self):
 		self.arch = Architecture['Z80']
