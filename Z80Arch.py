@@ -7,7 +7,7 @@ from binaryninja.architecture import Architecture
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
 from binaryninja.enums import InstructionTextTokenType, BranchType
 
-import skwrapper
+from . import skwrapper
 
 class Z80(Architecture):
 	name = 'Z80'
