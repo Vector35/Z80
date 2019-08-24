@@ -32,5 +32,5 @@ for i in range(65536):
     hexstr = hexlify(data[0:6]).decode('utf-8')
     print('%04X: %s -%s- -%s-' % (ADDR, hexstr.ljust(16), a, b))
 
-    assert a == b
+    assert a.lower() == b
 
