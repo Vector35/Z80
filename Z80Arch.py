@@ -192,7 +192,7 @@ class Z80(Architecture):
         # djnz is implicitly conditional
         elif decoded.op == OP.DJNZ:
             (oper0type, oper0val) = decoded.operands[0]
-            assert oper0type == OPR_TYPE.ADDR
+            assert oper0type == OPER_TYPE.ADDR
             result.add_branch(BranchType.TrueBranch, oper0val)
             result.add_branch(BranchType.FalseBranch, addr + decoded.len)
 
@@ -211,14 +211,11 @@ class Z80(Architecture):
 
         # ret can be conditional
         elif decoded.op == OP.RET:
-            assert len(decoded.operands) == 0 or decoded.operands[0][1] == OPER_TYPE.COND
-            # ret
-            if len(decoded.operands) == 0:
-                result.add_branch(BranchType.FunctionReturn)
-            # ret nz
-            else:
+            if decoded.operands and decoded.operands[0][1] == OPER_TYPE.CON:
                 # conditional returns dont' end block
                 pass
+            else:
+                result.add_branch(BranchType.FunctionReturn)
 
         # ret from interrupts
         elif decoded.op == OP.RETI or decoded.op == OP.RETN:
