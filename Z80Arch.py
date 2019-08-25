@@ -169,9 +169,9 @@ class Z80(Architecture):
                 result.add_branch(BranchType.CallDestination, decoded.operands[1][1])
             # call 0xdf07
             elif oper_type == OPER_TYPE.ADDR:
-                result.add_branch(BranchType.UnconditionalBranch, oper_val)
+                result.add_branch(BranchType.CallDestination, oper_val)
             else:
-                raise Exception('handling JR')
+                raise Exception('handling CALL')
 
         # ret can be conditional
         elif decoded.op == OP.RET:
@@ -343,12 +343,13 @@ class Z80(Architecture):
 # LIFTING
 #------------------------------------------------------------------------------
 
-    def operand_to_il(self, oper_type, oper_val, il):
+    def operand_to_il(self, oper_type, oper_val, il, size_hint=0):
         if oper_type == OPER_TYPE.REG:
             return il.reg(REG_TO_SIZE[oper_val], self.reg2str(oper_val))
 
         elif oper_type == OPER_TYPE.REG_DEREF:
-            return il.unimplemented()
+            return il.load(size_hint, \
+                self.operand_to_il(OPER_TYPE.REG, oper_val, il))
 
         elif oper_type == OPER_TYPE.ADDR:
 #            if oper_val < 0:
@@ -369,40 +370,9 @@ class Z80(Architecture):
             return il.unimplemented()
 
         elif oper_type in [OPER_TYPE.MEM_DISPL_IX, OPER_TYPE.MEM_DISPL_IY]:
-#            result.append(InstructionTextToken( \
-#                InstructionTextTokenType.BeginMemoryOperandToken, '('))
-#
-#            txt = 'ix' if oper_type == OPER_TYPE.MEM_DISPL_IX else 'iy'
-#            result.append(InstructionTextToken( \
-#                InstructionTextTokenType.RegisterToken, txt))
-
-#            if oper_val == 0:
-#                # omit displacement of 0
-#                pass
-#            elif oper_val >= 16:
-#                # (iy+0x28)
-#                result.append(InstructionTextToken( \
-#                    InstructionTextTokenType.TextToken, '+'))
-#                result.append(InstructionTextToken( \
-#                    InstructionTextTokenType.IntegerToken, '0x%X' % oper_val, oper_val))
-#            elif oper_val > 0:
-#                result.append(InstructionTextToken( \
-#                    InstructionTextTokenType.TextToken, '+'))
-#                result.append(InstructionTextToken( \
-#                    InstructionTextTokenType.IntegerToken, '%d' % oper_val, oper_val))
-#            elif oper_val <= -16:
-#                # adc a,(ix-0x55)
-#                result.append(InstructionTextToken( \
-#                    InstructionTextTokenType.TextToken, '-'))
-#                result.append(InstructionTextToken( \
-#                    InstructionTextTokenType.IntegerToken, '0x%X' % (-oper_val), oper_val))
-#            else:
-#                result.append(InstructionTextToken( \
-#                    InstructionTextTokenType.IntegerToken, '%d' % oper_val, oper_val))
-#
-#            result.append(InstructionTextToken( \
-#                InstructionTextTokenType.EndMemoryOperandToken, ')'))
-            return il.unimplemented()
+            reg_name = 'IX' if oper_type == OPER_TYPE.MEM_DISPL_IX else 'IY'
+            tmp = il.add(2, il.reg(2, reg_name), il.const(1, oper_val))
+            return il.load(size_hint, tmp)
 
         elif oper_type == OPER_TYPE.IMM:
             return il.const(4, oper_val)
@@ -421,21 +391,60 @@ class Z80(Architecture):
         if decoded.status != DECODE_STATUS.OK or decoded.len == 0:
             return None
 
-        if decoded.op == OP.CALL:
-            if decoded.operands[0][0] == OPER_TYPE.ADDR:
-                il.append(il.call(il.const_pointer(2, decoded.operands[0][1])))
+        (oper_type, oper_val) = decoded.operands[0] if decoded.operands else (None, None)
+        (operb_type, operb_val) = decoded.operands[1] if decoded.operands[1:] else (None, None)
+
+        if decoded.op == OP.ADD:
+            assert len(decoded.operands) == 2
+            if decoded.operands[0][0] == OPER_TYPE.REG:
+                size = REG_TO_SIZE[oper_val]
+                rhs = self.operand_to_il(operb_type, operb_val, il)
+                lhs = self.operand_to_il(oper_type, oper_val, il)
+                tmp = il.add(size, lhs, rhs)
+                tmp = il.set_reg(size, self.reg2str(oper_val), tmp)
+                il.append(tmp)
+            else:
+                il.append(il.unimplemented())
+
+        elif decoded.op == OP.CALL:
+            if oper_type == OPER_TYPE.ADDR:
+                il.append(il.call(il.const_pointer(2, oper_val)))
             else:
                 # TODO: handle the conditional
-                il.append(il.nop())
+                il.append(il.unimplemented())
+
+        elif decoded.op == OP.INC:
+            tmp = il.add(1, self.operand_to_il(oper_type, oper_val, il), il.const(1, 1))
+            tmp = il.set_reg(REG_TO_SIZE[oper_val], self.reg2str(oper_val), tmp)
+            il.append(tmp)
 
         elif decoded.op == OP.LD:
             assert len(decoded.operands) == 2
-            (ta,va) = decoded.operands[0]
-            (tb,vb) = decoded.operands[1]
 
-            if ta == OPER_TYPE.REG and tb == OPER_TYPE.IMM:
-                il.append(il.set_reg(REG_TO_SIZE[va], self.reg2str(va), self.operand_to_il(tb,vb,il)))
+            if oper_type == OPER_TYPE.REG:
+                size = REG_TO_SIZE[oper_val]
+                rhs = self.operand_to_il(operb_type, operb_val, il, size)
+                set_reg = il.set_reg(size, self.reg2str(oper_val), rhs)
+                il.append(set_reg)
             else:
+                il.append(il.unimplemented())
+
+        elif decoded.op == OP.POP:
+            if oper_type == OPER_TYPE.REG:
+                size = REG_TO_SIZE[oper_val]
+                tmp = il.pop(size)
+                tmp = il.set_reg(size, self.reg2str(oper_val), tmp)
+                il.append(tmp)
+            else:
+                il.append(il.unimplemented())
+
+        elif decoded.op == OP.PUSH:
+            if oper_type == OPER_TYPE.REG:
+                il.append(il.push( \
+                    REG_TO_SIZE[oper_val], \
+                    self.operand_to_il(oper_type, oper_val, il)))
+            else:
+                print('PUSH a: ' + str(oper_type))
                 il.append(il.unimplemented())
 
         elif decoded.op == OP.RET:
