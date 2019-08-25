@@ -130,7 +130,7 @@ class Z80(Architecture):
                 result.add_branch(BranchType.TrueBranch, decoded.operands[1][1])
                 result.add_branch(BranchType.FalseBranch, addr + decoded.len)
             # jp (hl); jp (ix); jp (iy)
-            elif oper_type in [OPER_TYPE.REG_HL_DEREF, OPER_TYPE.MEM_DISPL_IX, OPER_TYPE.MEM_DISPL_IY]:
+            elif oper_type in [OPER_TYPE.REG_DEREF, OPER_TYPE.MEM_DISPL_IX, OPER_TYPE.MEM_DISPL_IY]:
                 result.add_branch(BranchType.IndirectBranch)
             # jp 0xDEAD
             elif oper_type == OPER_TYPE.ADDR:
@@ -417,11 +417,6 @@ class Z80(Architecture):
             raise Exception("unknown operand type: " + str(oper_type))
 
     def get_instruction_low_level_il(self, data, addr, il):
-        def is_reg(operand):
-            return operand not in [OPER_TYPE.ADDR, OPER_TYPE.ADDR_DEREF, \
-                OPER_TYPE.MEM_DISPL_IX, OPER_TYPE.MEM_DISPL_IY, OPER_TYPE.IMM, \
-                OPER_TYPE.COND]
-
         decoded = decode(data, addr)
         if decoded.status != DECODE_STATUS.OK or decoded.len == 0:
             return None
@@ -438,8 +433,8 @@ class Z80(Architecture):
             (ta,va) = decoded.operands[0]
             (tb,vb) = decoded.operands[1]
 
-            if is_reg(ta) and tb == OPER_TYPE.IMM:
-                il.append(il.set_reg(REG_TO_SIZE[ta], REG_TO_STR[ta], self.operand_to_il(tb,vb,il)))
+            if ta == OPER_TYPE.REG and tb == OPER_TYPE.IMM:
+                il.append(il.set_reg(REG_TO_SIZE[va], self.reg2str(va), self.operand_to_il(tb,vb,il)))
             else:
                 il.append(il.unimplemented())
 
