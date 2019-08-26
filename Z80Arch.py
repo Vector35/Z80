@@ -5,7 +5,7 @@ import re
 from binaryninja.log import log_info
 from binaryninja.architecture import Architecture
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
-from binaryninja.enums import InstructionTextTokenType, BranchType
+from binaryninja.enums import InstructionTextTokenType, BranchType, FlagRole, LowLevelILFlagCondition
 
 from z80dis.z80 import *
 
@@ -102,6 +102,82 @@ class Z80(Architecture):
     }
 
     stack_pointer = "SP"
+
+    # S - sign, set if the 2-complement value is negative (copy of msb)
+    # Z - zero, set if value is zero
+    # H - half carry, from bit 3 to 4
+    # PV - parity when even number of bits set, overflow if 2-complement result doesn't fit in reg
+    # N - subtract, set if last operation was subtraction
+    # C - set if the result did not fit in register
+    flags = ['s', 'z', 'h', 'p', 'v', 'n', 'c']
+
+#   SpecialFlagRole = 0,
+#   ZeroFlagRole = 1,
+#   PositiveSignFlagRole = 2,
+#   NegativeSignFlagRole = 3,
+#   CarryFlagRole = 4,
+#   OverflowFlagRole = 5,
+#   HalfCarryFlagRole = 6,
+#   EvenParityFlagRole = 7,
+#   OddParityFlagRole = 8,
+#   OrderedFlagRole = 9,
+#   UnorderedFlagRole = 10
+    flag_roles = {
+        's': FlagRole.NegativeSignFlagRole,
+        'z': FlagRole.ZeroFlagRole,
+        'h': FlagRole.HalfCarryFlagRole,
+        'p': FlagRole.EvenParityFlagRole,
+        'v': FlagRole.OverflowFlagRole,
+        'n': FlagRole.SpecialFlagRole,
+        'c': FlagRole.CarryFlagRole
+    }
+
+#		LLFC_E                  ==         Equal
+#		LLFC_NE                 !=         Not equal
+#		LLFC_SLT                s<         Signed less than
+#		LLFC_ULT                u<         Unsigned less than
+#		LLFC_SLE                s<=        Signed less than or equal
+#		LLFC_ULE                u<=        Unsigned less than or equal
+#		LLFC_SGE                s>=        Signed greater than or equal
+#		LLFC_UGE                u>=        Unsigned greater than or equal
+#		LLFC_SGT                s>         Signed greater than
+#		LLFC_UGT                u>         Unsigned greater than
+#		LLFC_NEG                -          Negative
+#		LLFC_POS                +          Positive
+#		LLFC_O                  overflow   Overflow
+#		LLFC_NO                 !overflow  No overflow
+    flags_required_for_flag_condition = {
+        # S, sign flag is in NEG and POS
+        #LowLevelILFlagCondition.LLFC_NEG: ['s'],
+        #LowLevelILFlagCondition.LLFC_POS: ['s'],
+        # Z, zero flag for == and !=
+        #LowLevelILFlagCondition.LLFC_E: ['z'],
+        #LowLevelILFlagCondition.LLFC_NE: ['z'],
+        # H, half carry for ???
+        # P, parity for ???
+        # V, overflow for these, since they subtract, maybe?
+        #LowLevelILFlagCondition.LLFC_SGT: ['v'],
+        #LowLevelILFlagCondition.LLFC_SGE: ['v'],
+        #LowLevelILFlagCondition.LLFC_SLT: ['v'],
+        #LowLevelILFlagCondition.LLFC_SLE: ['v'],
+        # N, for these, because it looks like NEGative :P
+        #LowLevelILFlagCondition.LLFC_NEG: ['n'],
+        # C, for these
+        #LowLevelILFlagCondition.LLFC_UGE: ['c'],
+        #LowLevelILFlagCondition.LLFC_ULT: ['c'],
+    }
+
+    # user defined id's for flag writing groups
+    # eg: '*' writes all flags
+    # eg: 'cvs' writes carry, overflow, sign
+    # these are given to some instruction IL objects as the optional flags='*' argument
+    flag_write_types = ['dummy', '*', 'c']
+
+    flags_written_by_flag_write_type = {
+        'dummy': [],
+        '*': ['s', 'z', 'h', 'p', 'v', 'n', 'c'],
+        'c': ['c']
+    }    
 
 #------------------------------------------------------------------------------
 # CFG building
@@ -394,13 +470,16 @@ class Z80(Architecture):
         (oper_type, oper_val) = decoded.operands[0] if decoded.operands else (None, None)
         (operb_type, operb_val) = decoded.operands[1] if decoded.operands[1:] else (None, None)
 
-        if decoded.op == OP.ADD:
+        if decoded.op in [OP.ADD, OP.ADC]:
             assert len(decoded.operands) == 2
-            if decoded.operands[0][0] == OPER_TYPE.REG:
+            if oper_type == OPER_TYPE.REG:
                 size = REG_TO_SIZE[oper_val]
-                rhs = self.operand_to_il(operb_type, operb_val, il)
+                rhs = self.operand_to_il(operb_type, operb_val, il, size)
                 lhs = self.operand_to_il(oper_type, oper_val, il)
-                tmp = il.add(size, lhs, rhs)
+                if decoded.op == OP.ADD:
+                    tmp = il.add(size, lhs, rhs, flags='*')
+                else:
+                    tmp = il.add_carry(size, lhs, rhs, il.flag("c"), flags='c')
                 tmp = il.set_reg(size, self.reg2str(oper_val), tmp)
                 il.append(tmp)
             else:
@@ -414,8 +493,9 @@ class Z80(Architecture):
                 il.append(il.unimplemented())
 
         elif decoded.op == OP.INC:
-            tmp = il.add(1, self.operand_to_il(oper_type, oper_val, il), il.const(1, 1))
-            tmp = il.set_reg(REG_TO_SIZE[oper_val], self.reg2str(oper_val), tmp)
+            size = REG_TO_SIZE[oper_val] if oper_type == OPER_TYPE.REG else 1
+            tmp = il.add(size, self.operand_to_il(oper_type, oper_val, il), il.const(1, 1))
+            tmp = il.set_reg(size, self.reg2str(oper_val), tmp)
             il.append(tmp)
 
         elif decoded.op == OP.LD:
