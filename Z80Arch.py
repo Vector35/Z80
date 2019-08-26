@@ -3,6 +3,7 @@
 import re
 
 from binaryninja.log import log_info
+from binaryninja.lowlevelil import LowLevelILLabel, LLIL_TEMP
 from binaryninja.architecture import Architecture
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
 from binaryninja.enums import InstructionTextTokenType, BranchType, FlagRole, LowLevelILFlagCondition
@@ -171,12 +172,13 @@ class Z80(Architecture):
     # eg: '*' writes all flags
     # eg: 'cvs' writes carry, overflow, sign
     # these are given to some instruction IL objects as the optional flags='*' argument
-    flag_write_types = ['dummy', '*', 'c']
+    flag_write_types = ['dummy', '*', 'c', 'z']
 
     flags_written_by_flag_write_type = {
         'dummy': [],
         '*': ['s', 'z', 'h', 'p', 'v', 'n', 'c'],
-        'c': ['c']
+        'c': ['c'],
+        'z': ['z']
     }    
 
 #------------------------------------------------------------------------------
@@ -419,6 +421,36 @@ class Z80(Architecture):
 # LIFTING
 #------------------------------------------------------------------------------
 
+    def cond_to_antecedent(self, cond, il):
+        if cond == CC.ALWAYS:
+            return il.const(1,1)
+        elif cond == CC.N:
+            return il.flag('n')
+        elif cond == CC.NOT_N:
+            return il.not_expr(0, il.flag('n'))
+        elif cond == CC.Z:
+            return il.flag('z')
+        elif cond == CC.NOT_Z:
+            return il.not_expr(0, il.flag('z'))
+        elif cond == CC.C:
+            return il.flag('c')
+        elif cond == CC.NOT_C:
+            return il.not_expr(0, il.flag('c'))
+        elif cond == CC.P:
+            return il.flag('p')
+        elif cond == CC.NOT_P:
+            return il.not_expr(0, il.flag('p'))
+        elif cond == CC.S:
+            return il.flag('s')
+        elif cond == CC.NOT_S:
+            return il.not_expr(0, il.flag('s'))
+        elif cond == CC.H:
+            return il.flag('h')
+        elif cond == CC.NOT_H:
+            return il.not_expr(0, il.flag('h'))
+        else:
+            raise Exception('unknown cond: ' + str(cond))
+
     def operand_to_il(self, oper_type, oper_val, il, size_hint=0, load_store_flip=False):
         if oper_type == OPER_TYPE.REG:
             return il.reg(REG_TO_SIZE[oper_val], self.reg2str(oper_val))
@@ -487,11 +519,39 @@ class Z80(Architecture):
                 # TODO: handle the conditional
                 il.append(il.unimplemented())
 
+        elif decoded.op == OP.DJNZ:
+            # decrement B
+            tmp = il.reg(1, 'B')
+            tmp = il.add(1, tmp, il.const(1,-1))
+            il.append(tmp)
+            # if nonzero, jump! (the "go" is built into il.if_expr)
+            t = il.get_label_for_address(Architecture['Z80'], oper_val)
+            f = LowLevelILLabel()
+            tmp = il.compare_not_equal(1, il.reg(1, 'B'), il.const(1, 0))
+            il.append(il.if_expr(tmp, t, f))
+            il.mark_label(f)
+
         elif decoded.op == OP.INC:
             size = REG_TO_SIZE[oper_val] if oper_type == OPER_TYPE.REG else 1
             tmp = il.add(size, self.operand_to_il(oper_type, oper_val, il), il.const(1, 1))
             tmp = il.set_reg(size, self.reg2str(oper_val), tmp)
             il.append(tmp)
+
+        elif decoded.op == OP.JR:
+            if oper_type == OPER_TYPE.COND:
+                ant = self.cond_to_antecedent(oper_val, il)
+                assert operb_type == OPER_TYPE.ADDR
+                t = il.get_label_for_address(Architecture['Z80'], operb_val)
+                f = LowLevelILLabel()
+                il.append(il.if_expr(ant, t, f))
+                il.mark_label(f)
+            else:
+                assert oper_type == OPER_TYPE.ADDR
+                label = il.get_label_for_address(Architecture['Z80'], oper_val)
+                if label:
+                    il.append(il.goto(label))
+                else:
+                    il.append(il.jump(il.const_pointer(2, oper_val)))
 
         elif decoded.op == OP.LD:
             assert len(decoded.operands) == 2
@@ -506,7 +566,7 @@ class Z80(Architecture):
 
         elif decoded.op == OP.OR:
             tmp = il.reg(1, 'A')
-            tmp = il.or_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='*')
+            tmp = il.or_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='z')
             tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
 
@@ -532,7 +592,7 @@ class Z80(Architecture):
             # rotate THROUGH carry: b0=c, c=b8
             # z80 'RL' -> llil 'RLC'
             tmp = self.operand_to_il(oper_type, oper_val, il)
-            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='*')
+            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='c')
             if oper_type == OPER_TYPE.REG:
                 tmp = il.set_reg(1, self.reg2str(oper_val), tmp)
             else:
@@ -551,7 +611,7 @@ class Z80(Architecture):
 
         elif decoded.op == OP.XOR:
             tmp = il.reg(1, 'A')
-            tmp = il.xor_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='*')
+            tmp = il.xor_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='z')
             tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
 
