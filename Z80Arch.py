@@ -419,7 +419,7 @@ class Z80(Architecture):
 # LIFTING
 #------------------------------------------------------------------------------
 
-    def operand_to_il(self, oper_type, oper_val, il, size_hint=0):
+    def operand_to_il(self, oper_type, oper_val, il, size_hint=0, load_store_flip=False):
         if oper_type == OPER_TYPE.REG:
             return il.reg(REG_TO_SIZE[oper_val], self.reg2str(oper_val))
 
@@ -428,30 +428,25 @@ class Z80(Architecture):
                 self.operand_to_il(OPER_TYPE.REG, oper_val, il))
 
         elif oper_type == OPER_TYPE.ADDR:
-#            if oper_val < 0:
-#                oper_val = oper_val & 0xFFFF
-#            txt = '0x%04x' % oper_val
-#            result.append(InstructionTextToken( \
-#                InstructionTextTokenType.PossibleAddressToken, txt, oper_val))
-            return il.unimplemented()
+            return il.const_pointer(2, oper_val)
 
         elif oper_type == OPER_TYPE.ADDR_DEREF:
-#            result.append(InstructionTextToken( \
-#                InstructionTextTokenType.BeginMemoryOperandToken, '('))
-#            txt = '0x%04x' % oper_val
-#            result.append(InstructionTextToken( \
-#                InstructionTextTokenType.PossibleAddressToken, txt, oper_val))
-#            result.append(InstructionTextToken( \
-#                InstructionTextTokenType.EndMemoryOperandToken, ')'))
-            return il.unimplemented()
+            tmp = il.const_pointer(2, oper_val)
+            if load_store_flip:
+                return il.store(size_hint, tmp)
+            else:
+                return il.load(size_hint, tmp)
 
         elif oper_type in [OPER_TYPE.MEM_DISPL_IX, OPER_TYPE.MEM_DISPL_IY]:
             reg_name = 'IX' if oper_type == OPER_TYPE.MEM_DISPL_IX else 'IY'
             tmp = il.add(2, il.reg(2, reg_name), il.const(1, oper_val))
-            return il.load(size_hint, tmp)
+            if load_store_flip:
+                return il.store(size_hint, tmp)
+            else:
+                return il.load(size_hint, tmp)
 
         elif oper_type == OPER_TYPE.IMM:
-            return il.const(4, oper_val)
+            return il.const(size_hint, oper_val)
 
         elif oper_type == OPER_TYPE.COND:
 #            txt = CC_TO_STR[oper_val]
@@ -509,6 +504,12 @@ class Z80(Architecture):
             else:
                 il.append(il.unimplemented())
 
+        elif decoded.op == OP.OR:
+            tmp = il.reg(1, 'A')
+            tmp = il.or_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='*')
+            tmp = il.set_reg(1, 'A', tmp)
+            il.append(tmp)
+
         elif decoded.op == OP.POP:
             if oper_type == OPER_TYPE.REG:
                 size = REG_TO_SIZE[oper_val]
@@ -527,8 +528,32 @@ class Z80(Architecture):
                 print('PUSH a: ' + str(oper_type))
                 il.append(il.unimplemented())
 
+        elif decoded.op == OP.RL:
+            # rotate THROUGH carry: b0=c, c=b8
+            # z80 'RL' -> llil 'RLC'
+            tmp = self.operand_to_il(oper_type, oper_val, il)
+            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='*')
+            if oper_type == OPER_TYPE.REG:
+                tmp = il.set_reg(1, self.reg2str(oper_val), tmp)
+            else:
+                tmp = self.operand_to_il(oper_type, oper_val, il, 1, load_store_flip=True)
+            il.append(tmp)
+
+        elif decoded.op == OP.RLA:
+            # rotate THROUGH carry (again, just with A)
+            tmp = il.reg(1, 'A')
+            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='*')
+            tmp = il.set_reg(1, 'A', tmp)
+            il.append(tmp)
+
         elif decoded.op == OP.RET:
             il.append(il.ret(il.pop(2)))
+
+        elif decoded.op == OP.XOR:
+            tmp = il.reg(1, 'A')
+            tmp = il.xor_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='*')
+            tmp = il.set_reg(1, 'A', tmp)
+            il.append(tmp)
 
         else:
             il.append(il.unimplemented())
