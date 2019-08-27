@@ -171,13 +171,14 @@ class Z80(Architecture):
     # eg: '*' writes all flags
     # eg: 'cvs' writes carry, overflow, sign
     # these are given to some instruction IL objects as the optional flags='*' argument
-    flag_write_types = ['dummy', '*', 'c', 'z', 'npv']
+    flag_write_types = ['dummy', '*', 'c', 'z', 'cszpv', 'npv']
 
     flags_written_by_flag_write_type = {
         'dummy': [],
         '*': ['s', 'z', 'h', 'pv', 'n', 'c'],
         'c': ['c'],
         'z': ['z'],
+        'cszpv': ['c','s','z','pv'],
         'npv': ['n','pv'] # eg: sbc
     }
 
@@ -545,11 +546,11 @@ class Z80(Architecture):
         else:
             raise Exception("unknown operand type: " + str(oper_type))
 
-    def copy_reg_expr(self, expr, il):
+    def copy_ilregister(self, expr, il):
         if expr.name.startswith('temp'):
             return il.reg(1, LLIL_TEMP(int(expr.name[4:])))
         else:
-            return il.reg(expr.info.size, expr.info.name)
+            return il.reg(expr.info.size, expr.name)
 
     def get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il):
         if flag == 'c':
@@ -557,8 +558,9 @@ class Z80(Architecture):
                 # op[0] is value to be rotated
                 # op[1] is amount of rotation (always 1)
                 # op[2] is carry input
-                tmp = self.copy_reg_expr(operands[0], il)
+                tmp = self.copy_ilregister(operands[0], il)
                 return il.test_bit(1, tmp, il.const(1,0x80))
+
 
         return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
 
@@ -585,12 +587,25 @@ class Z80(Architecture):
             else:
                 il.append(il.unimplemented())
 
+        elif decoded.op == OP.AND:
+            tmp = il.reg(1, 'A')
+            tmp = il.and_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='z')
+            tmp = il.set_reg(1, 'A', tmp)
+            il.append(tmp)
+
         elif decoded.op == OP.CALL:
             if oper_type == OPER_TYPE.ADDR:
                 il.append(il.call(il.const_pointer(2, oper_val)))
             else:
                 # TODO: handle the conditional
                 il.append(il.unimplemented())
+
+        elif decoded.op == OP.CP:
+            # sub, but do not write to register
+            lhs = il.reg(1, 'A')
+            rhs = self.operand_to_il(oper_type, oper_val, il, 1)
+            sub = il.sub(1, lhs, rhs, flags='cszpv')
+            il.append(sub)
 
         elif decoded.op == OP.DJNZ:
             # decrement B
@@ -655,7 +670,7 @@ class Z80(Architecture):
             # rotate THROUGH carry: b0=c, c=b8
             # z80 'RL' -> llil 'RLC'
             tmp = self.operand_to_il(oper_type, oper_val, il)
-            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='c')
+            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='cszpv')
             if oper_type == OPER_TYPE.REG:
                 tmp = il.set_reg(1, self.reg2str(oper_val), tmp)
             else:
@@ -663,10 +678,18 @@ class Z80(Architecture):
                 tmp = il.store(1, tmp2, tmp)
             il.append(tmp)
 
+        elif decoded.op == OP.RLCA:
+            # rotate THROUGH carry: b0=c, c=b8
+            # z80 'RL' -> llil 'RLC'
+            tmp = il.reg(1, 'A')
+            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='cszpv')
+            tmp = il.set_reg(1, 'A', tmp)
+            il.append(tmp)
+
         elif decoded.op == OP.RLA:
             # rotate THROUGH carry (again, just with A)
             tmp = il.reg(1, 'A')
-            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='*')
+            tmp = il.rotate_left(1, tmp, il.const(1, 1), flags='*')
             tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
 
@@ -691,9 +714,8 @@ class Z80(Architecture):
             size = REG_TO_SIZE[oper_val]
             lhs = self.operand_to_il(oper_type, oper_val, il, size)
             rhs = self.operand_to_il(operb_type, operb_val, il, size)
-            tmp = il.sub(size, rhs, il.flag('c'))
-            tmp = il.sub(size, lhs, tmp, flags='npv')
-            tmp = il.set_reg(size, self.reg2str(oper_val), tmp)
+            flag = il.flag('c')
+            tmp = il.sub_borrow(size, lhs, rhs, flag, flags='npv')
             il.append(tmp)
 
         elif decoded.op == OP.XOR:
