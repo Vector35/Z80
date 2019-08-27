@@ -561,6 +561,12 @@ class Z80(Architecture):
                 tmp = self.copy_ilregister(operands[0], il)
                 return il.test_bit(1, tmp, il.const(1,0x80))
 
+            if op == LowLevelILOperation.LLIL_SBB:
+                subtrahend = self.copy_ilregister(operands[1], il)
+                carry = il.flag('c')
+                subtrahend_plus_1 = il.add(2, subtrahend, carry)
+                minuend = self.copy_ilregister(operands[0], il)
+                return il.compare_unsigned_less_than(2, minuend, subtrahend_plus_1)
 
         return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
 
@@ -666,32 +672,41 @@ class Z80(Architecture):
                 print('PUSH a: ' + str(oper_type))
                 il.append(il.unimplemented())
 
-        elif decoded.op == OP.RL:
+        elif decoded.op in [OP.RL, OP.RLA]:
             # rotate THROUGH carry: b0=c, c=b8
             # z80 'RL' -> llil 'RLC'
-            tmp = self.operand_to_il(oper_type, oper_val, il)
-            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='cszpv')
-            if oper_type == OPER_TYPE.REG:
-                tmp = il.set_reg(1, self.reg2str(oper_val), tmp)
+            if decoded.op == OP.RLA:
+                src = il.reg(1, 'A')
             else:
-                tmp2 = self.operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
-                tmp = il.store(1, tmp2, tmp)
-            il.append(tmp)
+                src = self.operand_to_il(oper_type, oper_val, il)
 
-        elif decoded.op == OP.RLCA:
-            # rotate THROUGH carry: b0=c, c=b8
+            rot = il.rotate_left_carry(1, src, il.const(1, 1), il.flag('c'), flags='cszpv')
+
+            if decoded.op == OP.RLA:
+                il.append(il.set_reg(1, 'A', rot))
+            elif oper_type == OPER_TYPE.REG:
+                il.append(il.set_reg(1, self.reg2str(oper_val), rot))
+            else:
+                tmp = self.operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
+                il.append(il.store(1, tmp2, tmp))
+
+        elif decoded.op in [OP.RLC, OP.RLCA]:
+            # rotate and COPY to carry: b0=c, c=b8
             # z80 'RL' -> llil 'RLC'
-            tmp = il.reg(1, 'A')
-            tmp = il.rotate_left_carry(1, tmp, il.const(1, 1), il.flag('c'), flags='cszpv')
-            tmp = il.set_reg(1, 'A', tmp)
-            il.append(tmp)
+            if decoded.op == OP.RLCA:
+                src = il.reg(1, 'A')
+            else:
+                src = self.operand_to_il(oper_type, oper_val, il)
 
-        elif decoded.op == OP.RLA:
-            # rotate THROUGH carry (again, just with A)
-            tmp = il.reg(1, 'A')
-            tmp = il.rotate_left(1, tmp, il.const(1, 1), flags='*')
-            tmp = il.set_reg(1, 'A', tmp)
-            il.append(tmp)
+            rot = il.rotate_left(1, src, il.const(1, 1), flags='cszpv')
+
+            if decoded.op == OP.RLCA:
+                il.append(il.set_reg(1, 'A', rot))
+            elif oper_type == OPER_TYPE.REG:
+                il.append(il.set_reg(1, self.reg2str(oper_val), rot))
+            else:
+                tmp = self.operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
+                il.append(il.store(1, tmp2, tmp))
 
         elif decoded.op == OP.RET:
             tmp = il.ret(il.pop(2))
@@ -715,7 +730,7 @@ class Z80(Architecture):
             lhs = self.operand_to_il(oper_type, oper_val, il, size)
             rhs = self.operand_to_il(operb_type, operb_val, il, size)
             flag = il.flag('c')
-            tmp = il.sub_borrow(size, lhs, rhs, flag, flags='npv')
+            tmp = il.sub_borrow(size, lhs, rhs, flag, flags='*')
             il.append(tmp)
 
         elif decoded.op == OP.XOR:
