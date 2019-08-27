@@ -426,86 +426,86 @@ class Z80(Architecture):
             return il.const(1,1)
 
         # {'n', 'nn'} == {'negative', 'not negative'}
-        elif cond == CC.N:
+        if cond == CC.N:
             return il.flag('n')
-        elif cond == CC.NOT_N:
+        if cond == CC.NOT_N:
             return il.not_expr(0, il.flag('n'))
 
         # {'z', 'nz'} == {'zero', 'not zero'}
-        elif cond == CC.Z:
+        if cond == CC.Z:
             return il.flag('z')
-        elif cond == CC.NOT_Z:
+        if cond == CC.NOT_Z:
             return il.not_expr(0, il.flag('z'))
 
         # {'c', 'nc'} == {'carry', 'not carry'}
-        elif cond == CC.C:
+        if cond == CC.C:
             return il.flag('c')
-        elif cond == CC.NOT_C:
+        if cond == CC.NOT_C:
             return il.not_expr(0, il.flag('c'))
 
         # {'pe', 'po'} == {'parity even', 'parity odd'} == {'overflow', 'no overflow'}
-        elif cond == CC.P:
+        if cond == CC.P:
             return il.flag('pv')
-        elif cond == CC.NOT_P:
+        if cond == CC.NOT_P:
             return il.not_expr(0, il.flag('pv'))
 
         # {'m', 'p'} == {'minus', 'plus'} == {'sign flag set', 'sign flag clear'}
-        elif cond == CC.S:
+        if cond == CC.S:
             return il.flag('s')
-        elif cond == CC.NOT_S:
+        if cond == CC.NOT_S:
             return il.not_expr(0, il.flag('s'))
 
-        elif cond == CC.H:
+        if cond == CC.H:
             return il.flag('h')
-        elif cond == CC.NOT_H:
+        if cond == CC.NOT_H:
             return il.not_expr(0, il.flag('h'))
-        else:
-            raise Exception('unknown cond: ' + str(cond))
+ 
+        raise Exception('unknown cond: ' + str(cond))
 
-    def goto_or_jump(self, address, il):
-        label = il.get_label_for_address(Architecture['Z80'], address)
-        if label:
-            il.append(il.goto(label))
-        else:
-            il.append(il.jump(il.const_pointer(2, address)))
-
-    def append_jump(self, target_type, target_val, il):
+    def goto_or_jump(self, target_type, target_val, il):
         if target_type == OPER_TYPE.ADDR:
             tmp = il.get_label_for_address(Architecture['Z80'], target_val)
             if tmp:
-                il.append(il.goto(tmp))
+                return il.goto(tmp)
             else:
-                il.append(il.jump(il.const_pointer(2, target_val)))
+                return il.jump(il.const_pointer(2, target_val))
         else:
             tmp = self.operand_to_il(target_type, target_val, il, 2)
-            il.append(il.jump(tmp))
+            return il.jump(tmp)
+
+    def append_conditional_instr(self, cond, instr, il):
+        if cond == CC.ALWAYS:
+            il.append(instr)
+        else:
+            ant = self.cond_to_antecedent(cond, il)
+            t = LowLevelILLabel()
+            f = LowLevelILLabel()
+            il.append(il.if_expr(ant, t, f))
+            il.mark_label(t)
+            il.append(instr)
+            il.mark_label(f)
 
     def append_conditional_jump(self, cond, target_type, target_val, il):
         # case: condition always
         if cond == CC.ALWAYS:
-            self.append_jump(target_type, target_val, il)
+            il.append(goto_or_jump(target_type, target_val, il))
             return
 
         # case: condition and label available
-        ant = self.cond_to_antecedent(cond, il)
-
         if target_type == OPER_TYPE.ADDR:
             t = il.get_label_for_address(Architecture['Z80'], target_val)
             if t:
                 # if label exists, we can make it the true half of an if and
                 # generate compact code
                 f = LowLevelILLabel()
+                ant = self.cond_to_antecedent(cond, il)
                 il.append(il.if_expr(ant, t, f))
                 il.mark_label(f)
                 return
 
         # case: conditional and address available
-        t = LowLevelILLabel()
-        f = LowLevelILLabel()
-        il.append(il.if_expr(ant, t, f))
-        il.mark_label(t)
-        self.append_jump(target_type, target_val, il)
-        il.mark_label(f)
+        tmp = append(self.goto_or_jump(target_type, target_val, il))
+        append_conditional_instr(cond, tmp, il)
 
     def operand_to_il(self, oper_type, oper_val, il, size_hint=0, peel_load=False):
         if oper_type == OPER_TYPE.REG:
@@ -614,7 +614,7 @@ class Z80(Architecture):
             if oper_type == OPER_TYPE.COND:
                 self.append_conditional_jump(oper_val, operb_type, operb_val, il)
             else:
-                self.append_jump(oper_type, oper_val, il)
+                il.append(self.goto_or_jump(oper_type, oper_val, il))
 
         elif decoded.op == OP.LD:
             assert len(decoded.operands) == 2
@@ -671,7 +671,11 @@ class Z80(Architecture):
             il.append(tmp)
 
         elif decoded.op == OP.RET:
-            il.append(il.ret(il.pop(2)))
+            tmp = il.ret(il.pop(2))
+            if decoded.operands:
+                self.append_conditional_instr(decoded.operands[0][1], tmp, il)
+            else:
+                il.append(tmp)
 
         elif decoded.op == OP.SUB:
             tmp = self.operand_to_il(oper_type, oper_val, il, 1)
