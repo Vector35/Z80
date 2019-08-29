@@ -3,7 +3,7 @@
 import re
 
 from binaryninja.log import log_info
-from binaryninja.lowlevelil import LowLevelILLabel, LLIL_TEMP
+from binaryninja.lowlevelil import LowLevelILLabel, LowLevelILInstruction, ILRegister, LLIL_TEMP, LowLevelILExpr
 from binaryninja.architecture import Architecture
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
 from binaryninja.enums import InstructionTextTokenType, BranchType, FlagRole, LowLevelILFlagCondition, LowLevelILOperation
@@ -460,7 +460,7 @@ class Z80(Architecture):
             return il.flag('h')
         if cond == CC.NOT_H:
             return il.not_expr(0, il.flag('h'))
- 
+
         raise Exception('unknown cond: ' + str(cond))
 
     def goto_or_jump(self, target_type, target_val, il):
@@ -543,30 +543,93 @@ class Z80(Architecture):
 #                InstructionTextTokenType.TextToken, txt))
             return il.unimplemented()
 
+
         else:
             raise Exception("unknown operand type: " + str(oper_type))
 
-    def copy_ilregister(self, expr, il):
-        if expr.name.startswith('temp'):
-            return il.reg(1, LLIL_TEMP(int(expr.name[4:])))
+    def op_to_llil(self, op, operands, il):
+        """ LowLevelILOperation and list of operands, return LowLevelILInstruction
+            op: LowLevelILOperation
+            op, [oper0, oper1, ...] -> LowLevelILInstruction
+        """
+        if op == LowLevelILOperation.LLIL_FLAG:
+            return il.flag(operands[0])
+
+        elif op == LowLevelILOperation.LLIL_REG:
+            name = operands[0].name
+            size = 1 if name.startswith('temp') else operands[0].info.size
+            return il.reg(size, name)
+
+        elif op == LowLevelILOperation.LLIL_SBB:
+            lhs = self.copy_il(operands[0], il)
+            rhs = self.copy_il(operands[1], il)
+            return il.sub_borrow(lhs.size, lhs, rhs, il.flag('c'))
+
+        elif op == LowLevelILOperation.LLIL_RLC:
+            print(operands[0])
+            print(type(operands[0]))
+            #lhs = self.copy_il(operands[0], il)
+            lhs = il.reg(1, 'A')
+            tmp = il.rotate_left_carry(1, lhs, il.const(1,1), il.flag('c'))
+            print(str(tmp))
+            return tmp
+
         else:
-            return il.reg(expr.info.size, expr.name)
+            raise Exception('op_to_llil() doesn\'t know how to handle operation: %s' % op)
+
+    def copy_il(self, foo, il):
+        if isinstance(foo, LowLevelILInstruction):
+            return self.op_to_llil(foo.operation, foo.operands, il)
+
+        elif isinstance(foo, ILRegister):
+            # promote it to an LLIL_REG (read register)
+            size = 1 if name.startswith('temp') else foo.info.size
+            return il.reg(size, foo)
+
+        else:
+            raise Exception('copy_il() doesn\'t know how to handle il: %s\n%s\n' % (foo, type(foo)))
 
     def get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il):
+        #print('get_flag_write_low_level_il(op=%s, flag=%s) (LLIL_RLC is: %d)' %
+        #    (LowLevelILOperation(op).name, flag, LowLevelILOperation.LLIL_RLC))
+
         if flag == 'c':
+            # we use LLIL RLC to mean "rotate thru carry" from Z80's RL, RLA
             if op == LowLevelILOperation.LLIL_RLC:
                 # op[0] is value to be rotated
                 # op[1] is amount of rotation (always 1)
                 # op[2] is carry input
-                tmp = self.copy_ilregister(operands[0], il)
-                return il.test_bit(1, tmp, il.const(1,0x80))
+                return il.test_bit(1, il.reg(size, operands[0]), il.const(1,0x80))
 
-            if op == LowLevelILOperation.LLIL_SBB:
-                subtrahend = self.copy_ilregister(operands[1], il)
-                carry = il.flag('c')
-                subtrahend_plus_1 = il.add(2, subtrahend, carry)
-                minuend = self.copy_ilregister(operands[0], il)
-                return il.compare_unsigned_less_than(2, minuend, subtrahend_plus_1)
+            # we use LLIL ROL to mean "rotate, copy MSB to carry" from Z80's RLC, RLCA
+            elif op == LowLevelILOperation.LLIL_ROL:
+                return il.test_bit(1, il.reg(size, operands[0]), il.const(1,0x80))
+
+#            # carry set for SBB if (b+c) greater than a in the calculation a - (b + c)
+#            if op == LowLevelILOperation.LLIL_SBB:
+#                subtrahend = self.copy_il(operands[1], il)
+#                carry = il.flag('c')
+#                subtrahend_plus_1 = il.add(2, subtrahend, carry)
+#                minuend = self.copy_il(operands[0], il)
+#                return il.compare_unsigned_less_than(2, minuend, subtrahend_plus_1)
+#
+#        elif flag == 'n':
+#            if op in [  LowLevelILOperation.LLIL_SBB,   # from z80 SBC
+#                        LowLevelILOperation.LLIL_SUB]:   # from z80 SUB, CP
+#                return il.const(1,1)
+#            else:
+#                return il.const(1,0)
+#
+#        elif flag == 's':
+#            tmp = self.op_to_llil(op, operands, il)
+#            return il.test_bit(1, tmp, il.const(1,0x80))
+#
+#        elif flag == 'pv':
+#            if op in [  LowLevelILOperation.LLIL_SBB,
+#                        LowLevelILOperation.LLIL_SUB]:
+#
+#                return il.test_bit(1, tmp
+#            pass
 
         return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
 
@@ -680,7 +743,7 @@ class Z80(Architecture):
             else:
                 src = self.operand_to_il(oper_type, oper_val, il)
 
-            rot = il.rotate_left_carry(1, src, il.const(1, 1), il.flag('c'), flags='cszpv')
+            rot = il.rotate_left_carry(1, src, il.const(1, 1), il.flag('c'), flags='c')
 
             if decoded.op == OP.RLA:
                 il.append(il.set_reg(1, 'A', rot))
@@ -692,13 +755,13 @@ class Z80(Architecture):
 
         elif decoded.op in [OP.RLC, OP.RLCA]:
             # rotate and COPY to carry: b0=c, c=b8
-            # z80 'RL' -> llil 'RLC'
+            # z80 'RL' -> llil 'ROL'
             if decoded.op == OP.RLCA:
                 src = il.reg(1, 'A')
             else:
                 src = self.operand_to_il(oper_type, oper_val, il)
 
-            rot = il.rotate_left(1, src, il.const(1, 1), flags='cszpv')
+            rot = il.rotate_left(1, src, il.const(1, 1), flags='c')
 
             if decoded.op == OP.RLCA:
                 il.append(il.set_reg(1, 'A', rot))
@@ -731,6 +794,7 @@ class Z80(Architecture):
             rhs = self.operand_to_il(operb_type, operb_val, il, size)
             flag = il.flag('c')
             tmp = il.sub_borrow(size, lhs, rhs, flag, flags='*')
+            tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
 
         elif decoded.op == OP.XOR:
