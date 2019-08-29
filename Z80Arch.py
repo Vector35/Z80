@@ -3,7 +3,7 @@
 import re
 
 from binaryninja.log import log_info
-from binaryninja.lowlevelil import LowLevelILLabel, LowLevelILInstruction, ILRegister, LLIL_TEMP, LowLevelILExpr
+from binaryninja.lowlevelil import LowLevelILLabel, LowLevelILInstruction, ILRegister, LLIL_TEMP, LLIL_GET_TEMP_REG_INDEX, LowLevelILExpr
 from binaryninja.architecture import Architecture
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
 from binaryninja.enums import InstructionTextTokenType, BranchType, FlagRole, LowLevelILFlagCondition, LowLevelILOperation
@@ -430,36 +430,36 @@ class Z80(Architecture):
         if cond == CC.N:
             return il.flag('n')
         if cond == CC.NOT_N:
-            return il.not_expr(0, il.flag('n'))
+            return il.xor_expr(1, il.flag('n'), il.const(1,1))
 
         # {'z', 'nz'} == {'zero', 'not zero'}
         if cond == CC.Z:
             return il.flag('z')
         if cond == CC.NOT_Z:
-            return il.not_expr(0, il.flag('z'))
+            return il.xor_expr(1, il.flag('z'), il.const(1,1))
 
         # {'c', 'nc'} == {'carry', 'not carry'}
         if cond == CC.C:
             return il.flag('c')
         if cond == CC.NOT_C:
-            return il.not_expr(0, il.flag('c'))
+            return il.xor_expr(1, il.flag('c'), il.const(1,1))
 
         # {'pe', 'po'} == {'parity even', 'parity odd'} == {'overflow', 'no overflow'}
         if cond == CC.P:
             return il.flag('pv')
         if cond == CC.NOT_P:
-            return il.not_expr(0, il.flag('pv'))
+            return il.xor_expr(1, il.flag('pv'), il.const(1,1))
 
         # {'m', 'p'} == {'minus', 'plus'} == {'sign flag set', 'sign flag clear'}
         if cond == CC.S:
             return il.flag('s')
         if cond == CC.NOT_S:
-            return il.not_expr(0, il.flag('s'))
+            return il.xor_expr(1, il.flag('s'), il.const(1,1))
 
         if cond == CC.H:
             return il.flag('h')
         if cond == CC.NOT_H:
-            return il.not_expr(0, il.flag('h'))
+            return il.xor_expr(1, il.flag('h'), il.const(1,1))
 
         raise Exception('unknown cond: ' + str(cond))
 
@@ -543,57 +543,117 @@ class Z80(Architecture):
 #                InstructionTextTokenType.TextToken, txt))
             return il.unimplemented()
 
-
         else:
             raise Exception("unknown operand type: " + str(oper_type))
 
-    def op_to_llil(self, op, operands, il):
-        """ LowLevelILOperation and list of operands, return LowLevelILInstruction
-            op: LowLevelILOperation
-            op, [oper0, oper1, ...] -> LowLevelILInstruction
-        """
-        if op == LowLevelILOperation.LLIL_FLAG:
-            return il.flag(operands[0])
+    def expressionify(self, size, foo, il, temps_are_conds=False):
+        if isinstance(foo, LowLevelILExpr):
+            return foo
 
-        elif op == LowLevelILOperation.LLIL_REG:
-            name = operands[0].name
-            size = 1 if name.startswith('temp') else operands[0].info.size
-            return il.reg(size, name)
-
-        elif op == LowLevelILOperation.LLIL_SBB:
-            lhs = self.copy_il(operands[0], il)
-            rhs = self.copy_il(operands[1], il)
-            return il.sub_borrow(lhs.size, lhs, rhs, il.flag('c'))
-
-        elif op == LowLevelILOperation.LLIL_RLC:
-            print(operands[0])
-            print(type(operands[0]))
-            #lhs = self.copy_il(operands[0], il)
-            lhs = il.reg(1, 'A')
-            tmp = il.rotate_left_carry(1, lhs, il.const(1,1), il.flag('c'))
-            print(str(tmp))
-            return tmp
-
-        else:
-            raise Exception('op_to_llil() doesn\'t know how to handle operation: %s' % op)
-
-    def copy_il(self, foo, il):
-        if isinstance(foo, LowLevelILInstruction):
-            return self.op_to_llil(foo.operation, foo.operands, il)
-
-        elif isinstance(foo, ILRegister):
+        if isinstance(foo, ILRegister):
+            if temps_are_conds and LLIL_TEMP(foo.index):
+                # can't use il.reg() 'cause it will do lookup in architecture flags
+                return il.expr(LowLevelILOperation.LLIL_FLAG, foo.index) 
+                #return il.reg(size, 'cond:%d' % LLIL_GET_TEMP_REG_INDEX(foo.index))
+                
             # promote it to an LLIL_REG (read register)
-            size = 1 if name.startswith('temp') else foo.info.size
             return il.reg(size, foo)
 
+        elif isinstance(foo, ILFlag):
+            return il.flag(foo)
+
         else:
-            raise Exception('copy_il() doesn\'t know how to handle il: %s\n%s\n' % (foo, type(foo)))
+            raise Exception('expressionify() doesn\'t know how to handle il: %s\n%s\n' % (foo, type(foo)))
+
+    def gen_carry_out_expr(self, size, op, operands, il):
+        # strategy: input check
+        if op == LowLevelILOperation.LLIL_ADD:
+            # on `s = a + b` carry out is `a > (255-b)`
+            return il.compare_unsigned_greater_than(1,
+                # a
+                self.expressionify(size, operands[0], il),
+                # 255 - b
+                il.sub(1,
+                    il.const(1, 255),
+                    self.expressionify(size, operands[1], il)
+                )
+            )
+
+        elif op == LowLevelILOperation.LLIL_ADC:
+            # on `s = a + b` carry out is:
+            # `a > (255-b)` when no carry in
+            # `a >= (255-b)` when carry in
+            #
+            # equivalently:
+            # ((a > 255-b) && !c) | ((a >= 255-b) && c)
+
+            a = self.expressionify(size, operands[0], il)
+            b = self.expressionify(size, operands[1], il)
+            c = self.expressionify(size, operands[2], il)
+
+            return il.or_expr(1,
+                il.and_expr(1,
+                    # a > (255-b)
+                    il.compare_unsigned_greater_than(1, a, il.sub(1, il.const(1, 255), b)),
+                    # !c
+                    il.xor_expr(1, c, il.const(1,1))
+                ),
+
+                il.and_expr(1,
+                    # a >= (255-b)
+                    il.compare_unsigned_greater_equal(1, a, il.sub(1, il.const(1, 255), b)),
+                    # c
+                    c
+                ),
+            )
+
+        else:
+            raise Exception('gen_carry_out_expr(): %s' % op)
+
+    def twos_complement(self, size, value, il):
+        return il.add(size,
+            il.not_expr(size,
+                self.expressionify(size, value, il)
+            ),
+            il.const(size, 1)
+        )
 
     def get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il):
         #print('get_flag_write_low_level_il(op=%s, flag=%s) (LLIL_RLC is: %d)' %
         #    (LowLevelILOperation(op).name, flag, LowLevelILOperation.LLIL_RLC))
 
         if flag == 'c':
+            if op == LowLevelILOperation.LLIL_ADD:
+                return self.gen_carry_out_expr(size, op, operands, il)
+
+            if op == LowLevelILOperation.LLIL_ADC:
+                return self.gen_carry_out_expr(size, op, operands, il)
+
+            if op == LowLevelILOperation.LLIL_SUB:
+                operands = list(map(lambda x: self.expressionify(size, x, il), operands))
+                r = il.test_bit(1,
+                    il.sub(size, operands[0], operands[1]),
+                    il.const(1, 0x80)
+                )
+
+                a_not = il.xor_expr(1,
+                    il.test_bit(1, self.expressionify(size, operands[0], il), il.const(1, 0x80)),
+                    il.const(1, 1)
+                )
+
+                b = il.test_bit(1, self.expressionify(size, operands[1], il), il.const(1, 0x80))
+
+                return il.or_expr(1,
+                    il.or_expr(1,
+                        il.and_expr(1, a_not, b),
+                        il.and_expr(1, b, r) 
+                    ),
+                    il.and_expr(1, r, a_not)
+                )
+
+            if op == LowLevelILOperation.LLIL_SBB:
+                return il.const(1,1)
+
             # we use LLIL RLC to mean "rotate thru carry" from Z80's RL, RLA
             if op == LowLevelILOperation.LLIL_RLC:
                 # op[0] is value to be rotated
@@ -605,31 +665,57 @@ class Z80(Architecture):
             elif op == LowLevelILOperation.LLIL_ROL:
                 return il.test_bit(1, il.reg(size, operands[0]), il.const(1,0x80))
 
-#            # carry set for SBB if (b+c) greater than a in the calculation a - (b + c)
+            # LLIL SBB from Z80's SBC
+            # carry set for SBB if (b+c) greater than a in the calculation a - (b + c)
 #            if op == LowLevelILOperation.LLIL_SBB:
-#                subtrahend = self.copy_il(operands[1], il)
-#                carry = il.flag('c')
-#                subtrahend_plus_1 = il.add(2, subtrahend, carry)
-#                minuend = self.copy_il(operands[0], il)
-#                return il.compare_unsigned_less_than(2, minuend, subtrahend_plus_1)
+#                a = self.expressionify(1, operands[0], il)
+#                b = il.not_expr(1, self.expressionify(1, operands[1], il))
+#                c = il.xor_expr(1, il.flag('c'), il.const(1, 0x80))
 #
-#        elif flag == 'n':
-#            if op in [  LowLevelILOperation.LLIL_SBB,   # from z80 SBC
-#                        LowLevelILOperation.LLIL_SUB]:   # from z80 SUB, CP
-#                return il.const(1,1)
-#            else:
-#                return il.const(1,0)
+#                return Architecture.get_flag_write_low_level_il(
+#                    self, LowLevelILOperation.LLIL_ADC, size, write_type, flag,
+#                    [a, b, c], il)
 #
-#        elif flag == 's':
-#            tmp = self.op_to_llil(op, operands, il)
-#            return il.test_bit(1, tmp, il.const(1,0x80))
-#
-#        elif flag == 'pv':
-#            if op in [  LowLevelILOperation.LLIL_SBB,
-#                        LowLevelILOperation.LLIL_SUB]:
-#
-#                return il.test_bit(1, tmp
-#            pass
+#                return il.compare_unsigned_less_than(1, sum_, a)
+
+        elif flag == 'n':
+            if op in [  LowLevelILOperation.LLIL_SBB,   # from z80 SBC
+                        LowLevelILOperation.LLIL_SUB]:   # from z80 SUB, CP
+                return il.const(1,1)
+            else:
+                return il.const(1,0)
+
+        # TODO: copy expression then test output
+        #elif flag == 's':
+            #tmp = self.op_to_llil(op, operands, il)
+            #return il.test_bit(1, tmp, il.const(1,0x80))
+
+        # LLIL SBB from Z80's SBC
+        elif flag == 'pv':
+            if op in [LowLevelILOperation.LLIL_SBB, LowLevelILOperation.LLIL_SUB]:
+                a = self.expressionify(size, operands[0], il)
+                b = self.expressionify(size, operands[1], il)
+                self.expressionify(size, operands[2], il)
+
+                if op == LowLevelILOperation.LLIL_SUB:
+                    result = il.sub(size, a, b)
+                else:
+                    c = self.expressionify(size, operands[2], il)
+                    result = il.sub_borrow(size, a, b, c)
+
+                # overflow if two conditions are met:
+                return il.and_expr(1,
+                    # 1) msb's of inputs must differ
+                    il.xor_expr(1,
+                        il.test_bit(1, self.expressionify(size, operands[0], il), il.const(1, 0x80)),
+                        il.test_bit(1, self.expressionify(size, operands[1], il), il.const(1, 0x80))
+                    ),
+                    # 2) subtrahend msb equals result msb
+                    il.compare_equal(1,
+                        il.test_bit(1, self.expressionify(size, operands[1], il), il.const(1, 0x80)),
+                        il.test_bit(1, result, il.const(1, 0x80))
+                    )
+                )
 
         return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
 
@@ -780,12 +866,8 @@ class Z80(Architecture):
 
         elif decoded.op == OP.SUB:
             tmp = self.operand_to_il(oper_type, oper_val, il, 1)
-            tmp = il.sub(1, il.reg(1, 'A'), tmp)
-            if oper_type == OPER_TYPE.REG:
-                tmp = il.set_reg(1, 'A', tmp)
-            else:
-                tmp2 = self.operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
-                tmp = il.store(1, tmp2, tmp)
+            tmp = il.sub(1, il.reg(1, 'A'), tmp, flags='c')
+            tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
 
         elif decoded.op == OP.SBC:
