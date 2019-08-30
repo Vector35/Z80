@@ -795,6 +795,7 @@ class Z80(Architecture):
             # decrement B
             tmp = il.reg(1, 'B')
             tmp = il.add(1, tmp, il.const(1,-1))
+            tmp = il.set_reg(1, 'B', tmp)
             il.append(tmp)
             # if nonzero, jump! (the "go" is built into il.if_expr)
             t = il.get_label_for_address(Architecture['Z80'], oper_val)
