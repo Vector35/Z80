@@ -171,7 +171,7 @@ class Z80(Architecture):
     # eg: '*' writes all flags
     # eg: 'cvs' writes carry, overflow, sign
     # these are given to some instruction IL objects as the optional flags='*' argument
-    flag_write_types = ['dummy', '*', 'c', 'z', 'cszpv', 'npv']
+    flag_write_types = ['dummy', '*', 'c', 'z', 'cszpv', 'npv', 'not_c']
 
     flags_written_by_flag_write_type = {
         'dummy': [],
@@ -179,7 +179,8 @@ class Z80(Architecture):
         'c': ['c'],
         'z': ['z'],
         'cszpv': ['c','s','z','pv'],
-        'npv': ['n','pv'] # eg: sbc
+        'npv': ['n','pv'], # eg: sbc
+        'not_c': ['s', 'z', 'h', 'pv', 'n'] # eg: dec byte
     }
 
 #------------------------------------------------------------------------------
@@ -505,8 +506,8 @@ class Z80(Architecture):
                 return
 
         # case: conditional and address available
-        tmp = append(self.goto_or_jump(target_type, target_val, il))
-        append_conditional_instr(cond, tmp, il)
+        tmp = il.append(self.goto_or_jump(target_type, target_val, il))
+        self.append_conditional_instr(cond, tmp, il)
 
     def operand_to_il(self, oper_type, oper_val, il, size_hint=0, peel_load=False):
         if oper_type == OPER_TYPE.REG:
@@ -897,6 +898,20 @@ class Z80(Architecture):
             tmp = il.sub(1, il.reg(1, 'A'), tmp, flags='c')
             tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
+
+        elif decoded.op == OP.DEC:
+            if oper_type == OPER_TYPE.REG:
+                size = REG_TO_SIZE[oper_val]
+                reg = self.operand_to_il(oper_type, oper_val, il, size)
+                fwt = 'not_c' if size == 1 else None
+                tmp = il.sub(size, reg, il.const(1, 1), flags=fwt)
+                tmp = il.set_reg(size, self.reg2str(oper_val), tmp)
+                il.append(tmp)
+            else:
+                mem = self.operand_to_il(oper_type, oper_val, il, 1)
+                tmp = il.sub(1, mem, il.const(1, 1), flags='not_c')
+                tmp = il.store(1, mem, tmp)
+                il.append(tmp)
 
         elif decoded.op == OP.SBC:
             size = REG_TO_SIZE[oper_val]
