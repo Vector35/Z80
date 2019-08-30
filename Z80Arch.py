@@ -623,6 +623,12 @@ class Z80(Architecture):
             if op == LowLevelILOperation.LLIL_ADC:
                 return self.gen_carry_out_expr(size, op, operands, il)
 
+            if op == LowLevelILOperation.LLIL_ASR:
+                return il.test_bit(1,
+                    self.expressionify(size, operands[0], il),
+                    il.const(1, 1)
+                )
+
             if op == LowLevelILOperation.LLIL_SUB or op == LowLevelILOperation.LLIL_SBB:
 
                 if op == LowLevelILOperation.LLIL_SUB:
@@ -918,6 +924,20 @@ class Z80(Architecture):
                 self.append_conditional_instr(decoded.operands[0][1], tmp, il)
             else:
                 il.append(tmp)
+
+        elif decoded.op == OP.SRA:
+            tmp = self.operand_to_il(oper_type, oper_val, il, 1)
+            tmp = il.arith_shift_right(1, tmp, il.const(1, 1), flags='c')
+
+            if oper_type == OPER_TYPE.REG:
+                tmp = il.set_reg(1, self.reg2str(oper_val), tmp)
+            else:
+                tmp = il.store(1,
+                    self.operand_to_il(oper_type, oper_val, il, 1, peel_load=True),
+                    tmp
+                )
+
+            il.append(tmp)
 
         elif decoded.op == OP.SUB:
             tmp = self.operand_to_il(oper_type, oper_val, il, 1)
