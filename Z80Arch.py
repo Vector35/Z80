@@ -846,7 +846,11 @@ class Z80(Architecture):
                 set_reg = il.set_reg(size, self.reg2str(oper_val), rhs)
                 il.append(set_reg)
             else:
-                il.append(il.unimplemented())
+                assert operb_type == OPER_TYPE.REG
+                size = REG_TO_SIZE[operb_val]
+                src = self.operand_to_il(operb_type, operb_val, il, size)
+                dst = self.operand_to_il(oper_type, oper_val, il, size, peel_load=True)
+                il.append(il.store(size, dst, src))
 
         elif decoded.op == OP.OR:
             tmp = il.reg(1, 'A')
