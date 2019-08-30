@@ -570,12 +570,12 @@ class Z80(Architecture):
         # strategy: input check
         if op == LowLevelILOperation.LLIL_ADD:
             # on `s = a + b` carry out is `a > (255-b)`
-            return il.compare_unsigned_greater_than(1,
+            return il.compare_unsigned_greater_than(size,
                 # a
                 self.expressionify(size, operands[0], il),
                 # 255 - b
-                il.sub(1,
-                    il.const(1, 255),
+                il.sub(size,
+                    il.const(size, {1:255, 2:65535}[size]),
                     self.expressionify(size, operands[1], il)
                 )
             )
