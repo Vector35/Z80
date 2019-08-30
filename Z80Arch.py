@@ -672,13 +672,16 @@ class Z80(Architecture):
             elif op == LowLevelILOperation.LLIL_ROL:
                 return il.test_bit(1, il.reg(size, operands[0]), il.const(1,0x80))
 
+        elif flag == 'h':
+            return il.const(1, 0)
 
         elif flag == 'n':
             if op in [  LowLevelILOperation.LLIL_SBB,   # from z80 SBC
                         LowLevelILOperation.LLIL_SUB]:   # from z80 SUB, CP
-                return il.const(1,1)
+                return il.const(1, 1)
+
             else:
-                return il.const(1,0)
+                return il.const(1, 0)
 
         # TODO: copy expression then test output
         #elif flag == 's':
@@ -746,6 +749,16 @@ class Z80(Architecture):
             else:
                 return il.const(1,1)
 
+#        elif flag == 'z':
+#            if op == LowLevelILOperation.LLIL_TEST_BIT:
+#                return il.xor_expr(1,
+#                    il.test_bit(1,
+#                        self.expressionify(size, operands[0], il),
+#                        self.expressionify(size, operands[1], il)
+#                    ),
+#                    il.const(1, 1)
+#                )
+
         return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
 
     def get_instruction_low_level_il(self, data, addr, il):
@@ -776,6 +789,14 @@ class Z80(Architecture):
             tmp = il.and_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='z')
             tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
+
+        elif decoded.op == OP.BIT:
+            assert oper_type == OPER_TYPE.IMM
+            lhs = il.const(1, oper_val)
+            rhs = self.operand_to_il(operb_type, operb_val, il, 1)
+            il.append(il.set_flag('z', il.xor_expr(1, il.test_bit(1, lhs, rhs), il.const(1, 1))))
+            il.append(il.set_flag('n', il.const(0, 0)))
+            il.append(il.set_flag('h', il.const(0, 0)))
 
         elif decoded.op == OP.CALL:
             if oper_type == OPER_TYPE.ADDR:
