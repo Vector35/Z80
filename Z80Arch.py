@@ -678,6 +678,10 @@ class Z80(Architecture):
             elif op == LowLevelILOperation.LLIL_ROL:
                 return il.test_bit(1, il.reg(size, operands[0]), il.const(1,0x80))
 
+            # we use LLIL RLC to mean "rotate thru carry" from Z80's RL, RLA
+            if op == LowLevelILOperation.LLIL_RRC:
+                return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))                
+
         elif flag == 'h':
             return il.const(1, 0)
 
@@ -924,6 +928,24 @@ class Z80(Architecture):
                 self.append_conditional_instr(decoded.operands[0][1], tmp, il)
             else:
                 il.append(tmp)
+
+        elif decoded.op in [OP.RR, OP.RRA]:
+            # rotate THROUGH carry: b7=c, c=b0
+            # z80 'RL' -> llil 'RRC'
+            if decoded.op == OP.RRA:
+                src = il.reg(1, 'A')
+            else:
+                src = self.operand_to_il(oper_type, oper_val, il, 1)
+
+            rot = il.rotate_right_carry(1, src, il.const(1, 1), il.flag('c'), flags='c')
+
+            if decoded.op == OP.RRA:
+                il.append(il.set_reg(1, 'A', rot))
+            elif oper_type == OPER_TYPE.REG:
+                il.append(il.set_reg(1, self.reg2str(oper_val), rot))
+            else:
+                tmp2 = self.operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
+                il.append(il.store(1, tmp2, rot))
 
         elif decoded.op == OP.SRA:
             tmp = self.operand_to_il(oper_type, oper_val, il, 1)
