@@ -680,7 +680,7 @@ class Z80(Architecture):
 
             # we use LLIL RLC to mean "rotate thru carry" from Z80's RL, RLA
             if op == LowLevelILOperation.LLIL_RRC:
-                return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))                
+                return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))
 
         elif flag == 'h':
             return il.const(1, 0)
@@ -815,6 +815,9 @@ class Z80(Architecture):
                 # TODO: handle the conditional
                 il.append(il.unimplemented())
 
+        elif decoded.op == OP.CCF:
+            il.append(il.set_flag('c', il.xor_expr(1, il.flag('c'), il.const(1, 1))))
+
         elif decoded.op == OP.CP:
             # sub, but do not write to register
             lhs = il.reg(1, 'A')
@@ -834,6 +837,34 @@ class Z80(Architecture):
             tmp = il.compare_not_equal(1, il.reg(1, 'B'), il.const(1, 0))
             il.append(il.if_expr(tmp, t, f))
             il.mark_label(f)
+
+        elif decoded.op == OP.EX:
+            # temp0 = lhs
+            il.append(il.expr(LowLevelILOperation.LLIL_SET_REG,
+                LLIL_TEMP(0),
+                self.operand_to_il(oper_type, oper_val, il, 2).index,
+                size = 2
+            ))
+
+            # lhs = rhs
+            rhs = self.operand_to_il(operb_type, operb_val, il, 2)
+
+            if oper_type == OPER_TYPE.REG:
+                il.append(il.set_reg(2,
+                    self.reg2str(oper_val),
+                    rhs
+                ))
+            else:
+                il.append(il.store(2,
+                    self.operand_to_il(oper_type, oper_val, il, 2, peel_load=True),
+                    rhs
+                ))
+
+            # rhs = temp0
+            il.append(il.set_reg(2,
+                self.reg2str(operb_val),
+                il.expr(LowLevelILOperation.LLIL_REG, LLIL_TEMP(0), 2)
+            ))
 
         elif decoded.op == OP.INC:
             size = REG_TO_SIZE[oper_val] if oper_type == OPER_TYPE.REG else 1
