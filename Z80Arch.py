@@ -171,7 +171,7 @@ class Z80(Architecture):
     # eg: '*' writes all flags
     # eg: 'cvs' writes carry, overflow, sign
     # these are given to some instruction IL objects as the optional flags='*' argument
-    flag_write_types = ['dummy', '*', 'c', 'z', 'cszpv', 'npv', 'not_c']
+    flag_write_types = ['dummy', '*', 'c', 'z', 'cszpv', 'npv', 'cnz', 'not_c']
 
     flags_written_by_flag_write_type = {
         'dummy': [],
@@ -180,6 +180,7 @@ class Z80(Architecture):
         'z': ['z'],
         'cszpv': ['c','s','z','pv'],
         'npv': ['n','pv'], # eg: sbc
+        'cnz': ['c', 'n', 'z'], #eg: xor
         'not_c': ['s', 'z', 'h', 'pv', 'n'] # eg: dec byte
     }
 
@@ -682,6 +683,10 @@ class Z80(Architecture):
             if op == LowLevelILOperation.LLIL_RRC:
                 return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))
 
+            # xor clears C
+            if op == LowLevelILOperation.LLIL_XOR:
+                return il.const(1, 0);
+
         elif flag == 'h':
             return il.const(1, 0)
 
@@ -759,15 +764,15 @@ class Z80(Architecture):
             else:
                 return il.const(1,1)
 
-#        elif flag == 'z':
-#            if op == LowLevelILOperation.LLIL_TEST_BIT:
-#                return il.xor_expr(1,
-#                    il.test_bit(1,
-#                        self.expressionify(size, operands[0], il),
-#                        self.expressionify(size, operands[1], il)
-#                    ),
-#                    il.const(1, 1)
-#                )
+        elif flag == 'z':
+            if op == LowLevelILOperation.LLIL_TEST_BIT:
+                return il.xor_expr(1,
+                    il.test_bit(1,
+                        self.expressionify(size, operands[0], il),
+                        self.expressionify(size, operands[1], il)
+                    ),
+                    il.const(1, 1)
+                )
 
         return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
 
@@ -1023,7 +1028,7 @@ class Z80(Architecture):
 
         elif decoded.op == OP.XOR:
             tmp = il.reg(1, 'A')
-            tmp = il.xor_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='z')
+            tmp = il.xor_expr(1, self.operand_to_il(oper_type, oper_val, il, 1), tmp, flags='cnz')
             tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
 
