@@ -952,13 +952,37 @@ class Z80(Architecture):
             il.append(tmp)
 
         elif decoded.op == OP.PUSH:
-            if oper_type == OPER_TYPE.REG:
+            # possible operands are: af bc de hl ix iy
+            if oper_val == REG.AF:
+                # lo byte F first
+                il.append(il.push(2,
+                    il.or_expr(2,
+                        il.or_expr(1,
+                            il.or_expr(1,
+                                il.shift_left(1, il.flag('s'), il.const(1, 7)),
+                                il.shift_left(1, il.flag('z'), il.const(1, 6))
+                            ),
+                            il.or_expr(1,
+                                il.or_expr(1,
+                                    il.shift_left(1, il.flag('h'), il.const(1, 4)),
+                                    il.shift_left(1, il.flag('pv'), il.const(1, 2))
+                                ),
+                                il.or_expr(1,
+                                    il.shift_left(1, il.flag('n'), il.const(1, 1)),
+                                    il.flag('c')
+                                )
+                            )
+                        ),
+                        il.shift_left(2,
+                            il.reg(1, 'A'),
+                            il.const(1, 8)
+                        )
+                    )
+                ))
+            else:
                 il.append(il.push( \
                     REG_TO_SIZE[oper_val], \
                     self.operand_to_il(oper_type, oper_val, il)))
-            else:
-                print('PUSH a: ' + str(oper_type))
-                il.append(il.unimplemented())
 
         elif decoded.op in [OP.RL, OP.RLA]:
             # rotate THROUGH carry: b0=c, c=b8
