@@ -574,7 +574,7 @@ class Z80(Architecture):
             return il.compare_unsigned_greater_than(size,
                 # a
                 self.expressionify(size, operands[0], il),
-                # 255 - b
+                # 255 - b or 65536 - b
                 il.sub(size,
                     il.const(size, {1:255, 2:65535}[size]),
                     self.expressionify(size, operands[1], il)
@@ -596,14 +596,20 @@ class Z80(Architecture):
             return il.or_expr(1,
                 il.and_expr(1,
                     # a > (255-b)
-                    il.compare_unsigned_greater_than(1, a, il.sub(1, il.const(1, 255), b)),
+                    il.compare_unsigned_greater_than(size,
+                        a,
+                        il.sub(size, il.const(size, {1:255, 2:65535}[size]), b)
+                    ),
                     # !c
                     il.xor_expr(1, c, il.const(1,1))
                 ),
 
                 il.and_expr(1,
                     # a >= (255-b)
-                    il.compare_unsigned_greater_equal(1, a, il.sub(1, il.const(1, 255), b)),
+                    il.compare_unsigned_greater_equal(size,
+                        a,
+                        il.sub(size, il.const(size, {1:255, 2:65535}[size]), b)
+                    ),
                     # c
                     c
                 ),
