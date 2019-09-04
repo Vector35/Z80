@@ -636,6 +636,12 @@ class Z80(Architecture):
                     il.const(1, 1)
                 )
 
+            if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
+                return il.test_bit(2,
+                    self.expressionify(size, operands[0], il),
+                    il.const(2, (1<<0))
+                )
+
             if op == LowLevelILOperation.LLIL_SUB or op == LowLevelILOperation.LLIL_SBB:
 
                 if op == LowLevelILOperation.LLIL_SUB:
@@ -694,20 +700,27 @@ class Z80(Architecture):
                 return il.const(1, 0);
 
         elif flag == 'h':
+            if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
+                return il.test_bit(2,
+                    self.expressionify(size, operands[0], il),
+                    il.const(2, (1<<4))
+                )
+
             return il.const(1, 0)
 
         elif flag == 'n':
+            if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
+                return il.test_bit(2,
+                    self.expressionify(size, operands[0], il),
+                    il.const(2, (1<<1))
+                )
+
             if op in [  LowLevelILOperation.LLIL_SBB,   # from z80 SBC
                         LowLevelILOperation.LLIL_SUB]:   # from z80 SUB, CP
                 return il.const(1, 1)
 
             else:
                 return il.const(1, 0)
-
-        # TODO: copy expression then test output
-        #elif flag == 's':
-            #tmp = self.op_to_llil(op, operands, il)
-            #return il.test_bit(1, tmp, il.const(1,0x80))
 
         # LLIL SBB from Z80's SBC
         elif flag == 'pv':
@@ -732,6 +745,12 @@ class Z80(Architecture):
                         il.and_expr(1, r_not, a_not)
                     ),
                     il.and_expr(1, b_not, r)
+                )
+
+            if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
+                return il.test_bit(2,
+                    self.expressionify(size, operands[0], il),
+                    il.const(2, (1<<2))
                 )
 
             if op == LowLevelILOperation.LLIL_SUB or op == LowLevelILOperation.LLIL_SBB:
@@ -770,7 +789,21 @@ class Z80(Architecture):
             else:
                 return il.const(1,1)
 
+
+        elif flag == 's':
+            if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
+                return il.test_bit(2,
+                    self.expressionify(size, operands[0], il),
+                    il.const(2, (1<<7))
+                )
+
         elif flag == 'z':
+            if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
+                return il.test_bit(2,
+                    self.expressionify(size, operands[0], il),
+                    il.const(2, (1<<6))
+                )
+
             if op == LowLevelILOperation.LLIL_TEST_BIT:
                 return il.xor_expr(1,
                     il.test_bit(1,
@@ -911,13 +944,12 @@ class Z80(Architecture):
             il.append(tmp)
 
         elif decoded.op == OP.POP:
-            if oper_type == OPER_TYPE.REG:
-                size = REG_TO_SIZE[oper_val]
-                tmp = il.pop(size)
-                tmp = il.set_reg(size, self.reg2str(oper_val), tmp)
-                il.append(tmp)
-            else:
-                il.append(il.unimplemented())
+            fgroup = '*' if oper_val == REG.AF else None
+            # possible operands are: af bc de hl ix iy
+            size = REG_TO_SIZE[oper_val]
+            tmp = il.pop(size)
+            tmp = il.set_reg(size, self.reg2str(oper_val), tmp, flags=fgroup)
+            il.append(tmp)
 
         elif decoded.op == OP.PUSH:
             if oper_type == OPER_TYPE.REG:
