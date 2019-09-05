@@ -123,7 +123,7 @@ def append_conditional_instr(cond, instr, il):
         il.append(instr)
         il.mark_label(f)
 
-def append_conditional_jump(cond, target_type, target_val, il):
+def append_conditional_jump(cond, target_type, target_val, addr_fallthru, il):
     # case: condition always
     if cond == CC.ALWAYS:
         il.append(goto_or_jump(target_type, target_val, il))
@@ -132,17 +132,14 @@ def append_conditional_jump(cond, target_type, target_val, il):
     # case: condition and label available
     if target_type == OPER_TYPE.ADDR:
         t = il.get_label_for_address(Architecture['Z80'], target_val)
-        if t:
-            # if label exists, we can make it the true half of an if and
-            # generate compact code
-            f = LowLevelILLabel()
+        f = il.get_label_for_address(Architecture['Z80'], addr_fallthru)
+        if t and f:
             if cond in CC_UN_NOT:
                 ant = cond_to_antecedent(CC_UN_NOT[cond], il)
                 il.append(il.if_expr(ant, f, t))
             else:
                 ant = cond_to_antecedent(cond, il)
                 il.append(il.if_expr(ant, t, f))
-            il.mark_label(f)
             return
 
     # case: conditional and address available
@@ -450,7 +447,7 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
 # INSTRUCTION LIFTING
 #------------------------------------------------------------------------------
 
-def gen_instr_il(decoded, il):
+def gen_instr_il(addr, decoded, il):
     (oper_type, oper_val) = decoded.operands[0] if decoded.operands else (None, None)
     (operb_type, operb_val) = decoded.operands[1] if decoded.operands[1:] else (None, None)
 
@@ -553,7 +550,7 @@ def gen_instr_il(decoded, il):
 
     elif decoded.op in [OP.JP, OP.JR]:
         if oper_type == OPER_TYPE.COND:
-            append_conditional_jump(oper_val, operb_type, operb_val, il)
+            append_conditional_jump(oper_val, operb_type, operb_val, addr + decoded.len, il)
         else:
             il.append(goto_or_jump(oper_type, oper_val, il))
 

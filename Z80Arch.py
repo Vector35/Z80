@@ -411,7 +411,7 @@ class Z80(Architecture):
         if decoded.status != DECODE_STATUS.OK or decoded.len == 0:
             return None
 
-        Z80IL.gen_instr_il(decoded, il)
+        Z80IL.gen_instr_il(addr, decoded, il)
 
         return decoded.len
 
