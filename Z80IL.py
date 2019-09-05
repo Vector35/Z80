@@ -143,7 +143,7 @@ def append_conditional_jump(cond, target_type, target_val, addr_fallthru, il):
             return
 
     # case: conditional and address available
-    tmp = il.append(goto_or_jump(target_type, target_val, il))
+    tmp = goto_or_jump(target_type, target_val, il)
     append_conditional_instr(cond, tmp, il)
 
 def operand_to_il(oper_type, oper_val, il, size_hint=0, peel_load=False):
@@ -201,6 +201,9 @@ def expressionify(size, foo, il, temps_are_conds=False):
 
     elif isinstance(foo, ILFlag):
         return il.flag(foo)
+
+    elif isinstance(foo, int):
+        return il.const(size, foo)
 
     else:
         raise Exception('expressionify() doesn\'t know how to handle il: %s\n%s\n' % (foo, type(foo)))
@@ -509,7 +512,13 @@ def gen_instr_il(addr, decoded, il):
         il.append(tmp)
         # if nonzero, jump! (the "go" is built into il.if_expr)
         t = il.get_label_for_address(Architecture['Z80'], oper_val)
-        f = LowLevelILLabel()
+        if not t:
+            il.append(il.unimplemented())
+            return
+        f = il.get_label_for_address(Architecture['Z80'], addr + decoded.len)
+        if not f:
+            il.append(il.unimplemented())
+            return
         tmp = il.compare_not_equal(1, il.reg(1, 'B'), il.const(1, 0))
         il.append(il.if_expr(tmp, t, f))
         il.mark_label(f)
@@ -543,9 +552,15 @@ def gen_instr_il(addr, decoded, il):
         ))
 
     elif decoded.op == OP.INC:
-        size = REG_TO_SIZE[oper_val] if oper_type == OPER_TYPE.REG else 1
-        tmp = il.add(size, operand_to_il(oper_type, oper_val, il), il.const(1, 1))
-        tmp = il.set_reg(size, reg2str(oper_val), tmp)
+        # inc reg can be 1-byte or 2-byte
+        if oper_type == OPER_TYPE.REG:
+            size = REG_TO_SIZE[oper_val]
+            tmp = il.add(size, operand_to_il(oper_type, oper_val, il), il.const(1, 1))
+            tmp = il.set_reg(size, reg2str(oper_val), tmp)
+        else:
+            tmp = il.add(1, operand_to_il(oper_type, oper_val, il), il.const(1, 1))
+            tmp = il.store(1, operand_to_il(oper_type, oper_val, il, 1, peel_load=True), tmp)
+
         il.append(tmp)
 
     elif decoded.op in [OP.JP, OP.JR]:
