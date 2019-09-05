@@ -46,6 +46,11 @@ REG_TO_SIZE = {
     REG.PC:2
 }
 
+CC_UN_NOT = {
+    CC.NOT_N:CC.N, CC.NOT_Z:CC.Z, CC.NOT_C:CC.C,
+    CC.NOT_P:CC.P, CC.NOT_S:CC.S, CC.NOT_H:CC.H
+}
+
 #------------------------------------------------------------------------------
 # HELPERS
 #------------------------------------------------------------------------------
@@ -106,10 +111,14 @@ def append_conditional_instr(cond, instr, il):
     if cond == CC.ALWAYS:
         il.append(instr)
     else:
-        ant = cond_to_antecedent(cond, il)
         t = LowLevelILLabel()
         f = LowLevelILLabel()
-        il.append(il.if_expr(ant, t, f))
+        if cond in CC_UN_NOT:
+            ant = cond_to_antecedent(CC_UN_NOT[cond], il)
+            il.append(il.if_expr(ant, f, t))
+        else:
+            ant = cond_to_antecedent(cond, il)
+            il.append(il.if_expr(ant, t, f))
         il.mark_label(t)
         il.append(instr)
         il.mark_label(f)
@@ -127,8 +136,12 @@ def append_conditional_jump(cond, target_type, target_val, il):
             # if label exists, we can make it the true half of an if and
             # generate compact code
             f = LowLevelILLabel()
-            ant = cond_to_antecedent(cond, il)
-            il.append(il.if_expr(ant, t, f))
+            if cond in CC_UN_NOT:
+                ant = cond_to_antecedent(CC_UN_NOT[cond], il)
+                il.append(il.if_expr(ant, f, t))
+            else:
+                ant = cond_to_antecedent(cond, il)
+                il.append(il.if_expr(ant, t, f))
             il.mark_label(f)
             return
 

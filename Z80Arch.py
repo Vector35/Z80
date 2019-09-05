@@ -412,6 +412,6 @@ class Z80(Architecture):
             return None
 
         Z80IL.gen_instr_il(decoded, il)
-        
+
         return decoded.len
 
