@@ -515,8 +515,11 @@ class Z80(Architecture):
             return il.reg(REG_TO_SIZE[oper_val], self.reg2str(oper_val))
 
         elif oper_type == OPER_TYPE.REG_DEREF:
-            return il.load(size_hint, \
-                self.operand_to_il(OPER_TYPE.REG, oper_val, il))
+            tmp = self.operand_to_il(OPER_TYPE.REG, oper_val, il, size_hint)
+            if peel_load:
+                return tmp
+            else:
+                return il.load(size_hint, tmp)
 
         elif oper_type == OPER_TYPE.ADDR:
             return il.const_pointer(2, oper_val)
@@ -931,6 +934,9 @@ class Z80(Architecture):
 
             if oper_type == OPER_TYPE.REG:
                 size = REG_TO_SIZE[oper_val]
+                # for two-byte nonzero loads, guess that it's an address
+                if size == 2 and operb_type == OPER_TYPE.IMM and operb_val != 0:
+                    operb_type = OPER_TYPE.ADDR
                 rhs = self.operand_to_il(operb_type, operb_val, il, size)
                 set_reg = il.set_reg(size, self.reg2str(oper_val), rhs)
                 il.append(set_reg)
