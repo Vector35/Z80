@@ -845,10 +845,14 @@ class Z80(Architecture):
             il.append(tmp)
 
         elif decoded.op == OP.BIT:
+            # tricky:
+            # Z80  syntax: BIT bit_idx, operand     example: bit 0, (IX+6)
+            # LLIL syntax: test_bit operand, mask   example: test_bit(load(add(reg(ix), 6)), 0x1)
             assert oper_type == OPER_TYPE.IMM
-            lhs = il.const(1, oper_val)
-            rhs = self.operand_to_il(operb_type, operb_val, il, 1)
-            il.append(il.set_flag('z', il.xor_expr(1, il.test_bit(1, lhs, rhs), il.const(1, 1))))
+            assert oper_val >= 0 and oper_val <= 7
+            mask = il.const(1, 1<<oper_val)
+            operand = self.operand_to_il(operb_type, operb_val, il, 1)
+            il.append(il.set_flag('z', il.xor_expr(1, il.test_bit(1, operand, mask), il.const(1, 1))))
             il.append(il.set_flag('n', il.const(0, 0)))
             il.append(il.set_flag('h', il.const(0, 0)))
 
