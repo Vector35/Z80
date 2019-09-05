@@ -566,8 +566,18 @@ def gen_instr_il(addr, decoded, il):
             set_reg = il.set_reg(size, reg2str(oper_val), rhs)
             il.append(set_reg)
         else:
-            assert operb_type == OPER_TYPE.REG
-            size = REG_TO_SIZE[operb_val]
+            assert operb_type in [OPER_TYPE.REG, OPER_TYPE.IMM]
+
+            if operb_type == OPER_TYPE.REG:
+                # 1 or 2 byte stores are possible here:
+                # ld (0xcdab),bc
+                # ld (ix-0x55),a
+                size = REG_TO_SIZE[operb_val]
+            elif operb_type == OPER_TYPE.IMM:
+                # only 1 byte stores are possible
+                # eg: ld (ix-0x55),0xcd
+                size = 1
+
             src = operand_to_il(operb_type, operb_val, il, size)
             dst = operand_to_il(oper_type, oper_val, il, size, peel_load=True)
             il.append(il.store(size, dst, src))
