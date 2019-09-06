@@ -521,7 +521,6 @@ def gen_instr_il(addr, decoded, il):
             return
         tmp = il.compare_not_equal(1, il.reg(1, 'B'), il.const(1, 0))
         il.append(il.if_expr(tmp, t, f))
-        il.mark_label(f)
 
     elif decoded.op == OP.EX:
         # temp0 = lhs
@@ -596,6 +595,28 @@ def gen_instr_il(addr, decoded, il):
             src = operand_to_il(operb_type, operb_val, il, size)
             dst = operand_to_il(oper_type, oper_val, il, size, peel_load=True)
             il.append(il.store(size, dst, src))
+
+    elif decoded.op in [OP.LDI, OP.LDIR]:
+        if decoded.op == OP.LDIR:
+            t = LowLevelILLabel()
+            f = il.get_label_for_address(Architecture['Z80'], addr + decoded.len)
+            il.mark_label(t)
+
+        il.append(il.store(1, il.reg(2, 'DE'), il.load(1, il.reg(2, 'HL'))))
+        il.append(il.set_reg(2, 'DE', il.add(2, il.reg(2, 'DE'), il.const(2,1))))
+        il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2,1))))
+        il.append(il.set_reg(2, 'BC', il.sub(2, il.reg(2, 'BC'), il.const(2,1))))
+
+        if decoded.op == OP.LDIR:
+            do_mark = False
+            if not f:
+                do_mark = True
+                f = LowLevelILLabel()
+
+            il.append(il.if_expr(il.compare_not_equal(2, il.reg(2, 'BC'), il.const(2, 0)), t, f))
+
+            if do_mark:
+                il.mark_label(f)
 
     elif decoded.op == OP.OR:
         tmp = il.reg(1, 'A')
@@ -745,8 +766,7 @@ def gen_instr_il(addr, decoded, il):
         size = REG_TO_SIZE[oper_val]
         lhs = operand_to_il(oper_type, oper_val, il, size)
         rhs = operand_to_il(operb_type, operb_val, il, size)
-        flag = il.flag('c')
-        tmp = il.sub_borrow(size, lhs, rhs, flag, flags='*')
+        tmp = il.sub_borrow(size, lhs, rhs, il.flag('c'), flags='*')
         tmp = il.set_reg(1, 'A', tmp)
         il.append(tmp)
 
