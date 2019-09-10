@@ -63,36 +63,36 @@ def cond_to_antecedent(cond, il):
     if cond == CC.N:
         return il.flag('n')
     if cond == CC.NOT_N:
-        return il.xor_expr(1, il.flag('n'), il.const(1,1))
+        return il.not_expr(0, il.flag('n'))
 
     # {'z', 'nz'} == {'zero', 'not zero'}
     if cond == CC.Z:
         return il.flag('z')
     if cond == CC.NOT_Z:
-        return il.xor_expr(1, il.flag('z'), il.const(1,1))
+        return il.not_expr(0, il.flag('z'))
 
     # {'c', 'nc'} == {'carry', 'not carry'}
     if cond == CC.C:
         return il.flag('c')
     if cond == CC.NOT_C:
-        return il.xor_expr(1, il.flag('c'), il.const(1,1))
+        return il.not_expr(0, il.flag('c'))
 
     # {'pe', 'po'} == {'parity even', 'parity odd'} == {'overflow', 'no overflow'}
     if cond == CC.P:
         return il.flag('pv')
     if cond == CC.NOT_P:
-        return il.xor_expr(1, il.flag('pv'), il.const(1,1))
+        return il.not_expr(0, il.flag('pv'))
 
     # {'m', 'p'} == {'minus', 'plus'} == {'sign flag set', 'sign flag clear'}
     if cond == CC.S:
         return il.flag('s')
     if cond == CC.NOT_S:
-        return il.xor_expr(1, il.flag('s'), il.const(1,1))
+        return il.not_expr(0, il.flag('s'))
 
     if cond == CC.H:
         return il.flag('h')
     if cond == CC.NOT_H:
-        return il.xor_expr(1, il.flag('h'), il.const(1,1))
+        return il.not_expr(0, il.flag('h'))
 
     raise Exception('unknown cond: ' + str(cond))
 
@@ -247,7 +247,7 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                         il.sub(size, il.const(size, {1:255, 2:65535}[size]), b)
                     ),
                     # !c
-                    il.xor_expr(1, c, il.const(1,1))
+                    il.not_expr(0, c)
                 ),
 
                 il.and_expr(1,
