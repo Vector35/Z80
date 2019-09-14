@@ -273,44 +273,6 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                 il.const(2, (1<<0))
             )
 
-        if op == LowLevelILOperation.LLIL_SUB or op == LowLevelILOperation.LLIL_SBB:
-
-            if op == LowLevelILOperation.LLIL_SUB:
-                r = il.test_bit(1,
-                        il.sub(size,
-                            expressionify(size, operands[0], il),
-                            expressionify(size, operands[1], il)
-                        ),
-                    il.const(1, 0x80)
-                )
-            else:
-                r = il.test_bit(1,
-                        il.sub_borrow(size,
-                            expressionify(size, operands[0], il),
-                            expressionify(size, operands[1], il),
-                            expressionify(size, operands[2], il, True)
-                        ),
-                    il.const(1, 0x80)
-                )
-
-            a_not = il.xor_expr(1,
-                il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 0x80)),
-                il.const(1, 1)
-            )
-
-            b = il.test_bit(1, expressionify(size, operands[1], il), il.const(1, 0x80))
-
-            return il.or_expr(1,
-                il.or_expr(1,
-                    il.and_expr(1, a_not, b),
-                    il.and_expr(1, b, r)
-                ),
-                il.and_expr(1, r, a_not)
-            )
-
-        # LLIL SBB from Z80's SBC
-
-
         # we use LLIL RLC to mean "rotate thru carry" from Z80's RL, RLA
         if op == LowLevelILOperation.LLIL_RLC:
             # op[0] is value to be rotated
@@ -744,7 +706,7 @@ def gen_instr_il(addr, decoded, il):
 
     elif decoded.op == OP.SUB:
         tmp = operand_to_il(oper_type, oper_val, il, 1)
-        tmp = il.sub(1, il.reg(1, 'A'), tmp, flags='c')
+        tmp = il.sub(1, il.reg(1, 'A'), tmp, flags='*')
         tmp = il.set_reg(1, 'A', tmp)
         il.append(tmp)
 
