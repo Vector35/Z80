@@ -100,8 +100,8 @@ class Z80(Architecture):
         's': FlagRole.NegativeSignFlagRole,
         'z': FlagRole.ZeroFlagRole,
         'h': FlagRole.HalfCarryFlagRole,
-        'pv': FlagRole.SpecialFlagRole, # even parity or overflow, depending on instruction
-        'n': FlagRole.SpecialFlagRole,
+        'pv': FlagRole.OverflowFlagRole, # actually overflow or parity: TODO: implement later
+        'n': FlagRole.NegativeSignFlagRole,
         'c': FlagRole.CarryFlagRole
     }
 
@@ -128,16 +128,16 @@ class Z80(Architecture):
         #LowLevelILFlagCondition.LLFC_NE: ['z'],
         # H, half carry for ???
         # P, parity for ???
-        # V, overflow for these, since they subtract, maybe?
-        #LowLevelILFlagCondition.LLFC_SGT: ['v'],
-        #LowLevelILFlagCondition.LLFC_SGE: ['v'],
-        #LowLevelILFlagCondition.LLFC_SLT: ['v'],
-        #LowLevelILFlagCondition.LLFC_SLE: ['v'],
+        # s> s>= s< s<= done by sub and overflow test
+        LowLevelILFlagCondition.LLFC_SGT: ['pv'],
+        LowLevelILFlagCondition.LLFC_SGE: ['pv'],
+        LowLevelILFlagCondition.LLFC_SLT: ['pv'],
+        LowLevelILFlagCondition.LLFC_SLE: ['pv'],
         # N, for these, because it looks like NEGative :P
         #LowLevelILFlagCondition.LLFC_NEG: ['n'],
         # C, for these
-        #LowLevelILFlagCondition.LLFC_UGE: ['c'],
-        #LowLevelILFlagCondition.LLFC_ULT: ['c'],
+        LowLevelILFlagCondition.LLFC_UGE: ['c'],
+        LowLevelILFlagCondition.LLFC_ULT: ['c'],
     }
 
     # user defined id's for flag writing groups
@@ -400,11 +400,10 @@ class Z80(Architecture):
 
     def get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il):
         flag_il = Z80IL.gen_flag_il(op, size, write_type, flag, operands, il)
-
         if flag_il:
             return flag_il
-        else:
-            return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
+
+        return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
 
     def get_instruction_low_level_il(self, data, addr, il):
         decoded = decode(data, addr)

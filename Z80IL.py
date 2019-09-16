@@ -7,7 +7,7 @@
 # Binja includes
 from binaryninja.log import log_info
 from binaryninja.architecture import Architecture
-from binaryninja.enums import LowLevelILOperation
+from binaryninja.enums import LowLevelILOperation, LowLevelILFlagCondition
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
 from binaryninja.lowlevelil import LowLevelILLabel, ILRegister, ILFlag, LLIL_TEMP, LLIL_GET_TEMP_REG_INDEX, LowLevelILExpr
 
@@ -55,7 +55,7 @@ CC_UN_NOT = {
 # HELPERS
 #------------------------------------------------------------------------------
 
-def cond_to_antecedent(cond, il):
+def jcc_to_flag_cond(cond, il):
     if cond == CC.ALWAYS:
         return il.const(1,1)
 
@@ -80,8 +80,10 @@ def cond_to_antecedent(cond, il):
     # {'pe', 'po'} == {'parity even', 'parity odd'} == {'overflow', 'no overflow'}
     if cond == CC.P:
         return il.flag('pv')
+        #return il.flag_condition(LowLevelILFlagCondition.LLFC_SLE)
     if cond == CC.NOT_P:
         return il.not_expr(0, il.flag('pv'))
+        #return il.flag_condition(LowLevelILFlagCondition.LLFC_SGT)
 
     # {'m', 'p'} == {'minus', 'plus'} == {'sign flag set', 'sign flag clear'}
     if cond == CC.S:
@@ -114,10 +116,10 @@ def append_conditional_instr(cond, instr, il):
         t = LowLevelILLabel()
         f = LowLevelILLabel()
         if cond in CC_UN_NOT:
-            ant = cond_to_antecedent(CC_UN_NOT[cond], il)
+            ant = jcc_to_flag_cond(CC_UN_NOT[cond], il)
             il.append(il.if_expr(ant, f, t))
         else:
-            ant = cond_to_antecedent(cond, il)
+            ant = jcc_to_flag_cond(cond, il)
             il.append(il.if_expr(ant, t, f))
         il.mark_label(t)
         il.append(instr)
@@ -135,10 +137,10 @@ def append_conditional_jump(cond, target_type, target_val, addr_fallthru, il):
         f = il.get_label_for_address(Architecture['Z80'], addr_fallthru)
         if t and f:
             if cond in CC_UN_NOT:
-                ant = cond_to_antecedent(CC_UN_NOT[cond], il)
+                ant = jcc_to_flag_cond(CC_UN_NOT[cond], il)
                 il.append(il.if_expr(ant, f, t))
             else:
-                ant = cond_to_antecedent(cond, il)
+                ant = jcc_to_flag_cond(cond, il)
                 il.append(il.if_expr(ant, t, f))
             return
 
@@ -213,197 +215,43 @@ def expressionify(size, foo, il, temps_are_conds=False):
 #------------------------------------------------------------------------------
 
 def gen_flag_il(op, size, write_type, flag, operands, il):
-    #print('get_flag_write_low_level_il(op=%s, flag=%s) (LLIL_RLC is: %d)' %
-    #    (LowLevelILOperation(op).name, flag, LowLevelILOperation.LLIL_RLC))
-
-    if flag == 'c':
-        if op == LowLevelILOperation.LLIL_ADD:
-            # strategy: is a larger than space remaining in the uint?
-            return il.compare_unsigned_greater_than(size,
-                expressionify(size, operands[0], il),
-                il.sub(size,
-                    il.const(size, {1:255, 2:65535}[size]),
-                    expressionify(size, operands[1], il)
-                )
+    if op == LowLevelILOperation.LLIL_SBB:
+        if flag == 'c':
+            return il.compare_signed_greater_than(size,
+                il.add(size,
+                    expressionify(size, operands[1], il),
+                    expressionify(1, operands[2], il, True)
+                ),
+                expressionify(size, operands[0], il)
             )
 
-        if op == LowLevelILOperation.LLIL_ADC:
-            # on `s = a + b` carry out is:
-            # `a > (255-b)` when no carry in
-            # `a >= (255-b)` when carry in
-            #
-            # equivalently:
-            # ((a > 255-b) && !c) | ((a >= 255-b) && c)
-
+        if flag == 'pv':
             a = expressionify(size, operands[0], il)
             b = expressionify(size, operands[1], il)
             c = expressionify(size, operands[2], il)
+            one = il.const(1, 0)
+            result = il.sub(size, c, il.sub(size, a, b))
+            subtrahend = il.add(size, b, c)
 
-            return il.or_expr(1,
-                il.and_expr(1,
-                    # a > (255-b)
-                    il.compare_unsigned_greater_than(size,
-                        a,
-                        il.sub(size, il.const(size, {1:255, 2:65535}[size]), b)
+            return il.or_expr(0,
+                il.and_expr(0,
+                    # a>0 && (b+c)<0
+                    il.and_expr(0,
+                        il.compare_signed_greater_than(size, a, one),
+                        il.compare_signed_less_than(size, subtrahend, one)
                     ),
-                    # !c
-                    il.not_expr(0, c)
+                    # (a-(b+c))<0
+                    il.compare_signed_less_than(size, result, one)
                 ),
-
-                il.and_expr(1,
-                    # a >= (255-b)
-                    il.compare_unsigned_greater_equal(size,
-                        a,
-                        il.sub(size, il.const(size, {1:255, 2:65535}[size]), b)
+                il.and_expr(0,
+                    # a<0 && (b+c>0
+                    il.and_expr(0,
+                        il.compare_signed_less_than(size, a, one),
+                        il.compare_signed_greater_than(size, subtrahend, one)
                     ),
-                    # c
-                    c
-                ),
-            )
-
-        if op == LowLevelILOperation.LLIL_ASR:
-            return il.test_bit(1,
-                expressionify(size, operands[0], il),
-                il.const(1, 1)
-            )
-
-        if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
-            return il.test_bit(2,
-                expressionify(size, operands[0], il),
-                il.const(2, (1<<0))
-            )
-
-        # we use LLIL RLC to mean "rotate thru carry" from Z80's RL, RLA
-        if op == LowLevelILOperation.LLIL_RLC:
-            # op[0] is value to be rotated
-            # op[1] is amount of rotation (always 1)
-            # op[2] is carry input
-            return il.test_bit(1, il.reg(size, operands[0]), il.const(1,0x80))
-
-        # we use LLIL ROL to mean "rotate, copy MSB to carry" from Z80's RLC, RLCA
-        elif op == LowLevelILOperation.LLIL_ROL:
-            return il.test_bit(1, il.reg(size, operands[0]), il.const(1,0x80))
-
-        # we use LLIL RLC to mean "rotate thru carry" from Z80's RL, RLA
-        if op == LowLevelILOperation.LLIL_RRC:
-            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))
-
-        # xor clears C
-        if op == LowLevelILOperation.LLIL_XOR:
-            return il.const(1, 0);
-
-    elif flag == 'h':
-        if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
-            return il.test_bit(2,
-                expressionify(size, operands[0], il),
-                il.const(2, (1<<4))
-            )
-
-        return il.const(1, 0)
-
-    elif flag == 'n':
-        if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
-            return il.test_bit(2,
-                expressionify(size, operands[0], il),
-                il.const(2, (1<<1))
-            )
-
-        if op in [  LowLevelILOperation.LLIL_SBB,   # from z80 SBC
-                    LowLevelILOperation.LLIL_SUB]:   # from z80 SUB, CP
-            return il.const(1, 1)
-
-        else:
-            return il.const(1, 0)
-
-    # LLIL SBB from Z80's SBC
-    elif flag == 'pv':
-        if op == LowLevelILOperation.LLIL_ADD:
-            operands = list(map(lambda x: expressionify(size, x, il), operands))
-            r = il.test_bit(1,
-                il.add(size, operands[0], operands[1]),
-                il.const(1, 0x80)
-            )
-
-            r_not = il.xor_expr(1, r, il.const(1, 1))
-
-            a = il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 0x80))
-            a_not = il.xor_expr(1, a, il.const(1, 1))
-
-            b = il.test_bit(1, expressionify(size, operands[1], il), il.const(1, 0x80))
-            b_not = il.xor_expr(1, b, il.const(1, 1))
-
-            return il.or_expr(1,
-                il.or_expr(1,
-                    il.and_expr(1, a, b),
-                    il.and_expr(1, r_not, a_not)
-                ),
-                il.and_expr(1, b_not, r)
-            )
-
-        if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
-            return il.test_bit(2,
-                expressionify(size, operands[0], il),
-                il.const(2, (1<<2))
-            )
-
-        if op == LowLevelILOperation.LLIL_SUB or op == LowLevelILOperation.LLIL_SBB:
-
-            if op == LowLevelILOperation.LLIL_SUB:
-                r = il.test_bit(1,
-                        il.sub(size,
-                            expressionify(size, operands[0], il),
-                            expressionify(size, operands[1], il)
-                        ),
-                    il.const(1, 0x80)
+                    # (a-(b+c))>0
+                    il.compare_signed_greater_than(size, result, one)
                 )
-            else:
-                r = il.test_bit(1,
-                        il.sub_borrow(size,
-                            expressionify(size, operands[0], il),
-                            expressionify(size, operands[1], il),
-                            expressionify(size, operands[2], il, True)
-                        ),
-                    il.const(1, 0x80)
-                )
-
-            r_not = il.xor_expr(1, r, il.const(1, 1))
-
-            a = il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 0x80))
-            a_not = il.xor_expr(1, a, il.const(1, 1))
-
-            b = il.test_bit(1, expressionify(size, operands[1], il), il.const(1, 0x80))
-            b_not = il.xor_expr(1, b, il.const(1, 1))
-
-            return il.or_expr(1,
-                il.and_expr(1, il.and_expr(1, a, b_not), r_not),
-                il.and_expr(1, il.and_expr(1, a_not, b), r)
-            )
-
-        else:
-            return il.const(1,1)
-
-
-    elif flag == 's':
-        if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
-            return il.test_bit(2,
-                expressionify(size, operands[0], il),
-                il.const(2, (1<<7))
-            )
-
-    elif flag == 'z':
-        if op == LowLevelILOperation.LLIL_SET_REG and operands[0].name == 'AF':
-            return il.test_bit(2,
-                expressionify(size, operands[0], il),
-                il.const(2, (1<<6))
-            )
-
-        if op == LowLevelILOperation.LLIL_TEST_BIT:
-            return il.xor_expr(1,
-                il.test_bit(1,
-                    expressionify(size, operands[0], il),
-                    expressionify(size, operands[1], il)
-                ),
-                il.const(1, 1)
             )
 
     return None
