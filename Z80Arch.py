@@ -41,6 +41,7 @@ class Z80(Architecture):
 
         # main registers (sub)
         "A": RegisterInfo("AF", 1, 1),
+        "F": RegisterInfo("AF", 1, 0),
         "B": RegisterInfo("BC", 1, 1),
         "C": RegisterInfo("BC", 1, 0),
         "D": RegisterInfo("DE", 1, 1),
@@ -51,6 +52,7 @@ class Z80(Architecture):
 
         # alternate registers (sub)
         "A'": RegisterInfo("AF'", 1, 1),
+        "F'": RegisterInfo("AF'", 1, 0),
         "B'": RegisterInfo("BC'", 1, 1),
         "C'": RegisterInfo("BC'", 1, 0),
         "D'": RegisterInfo("DE'", 1, 1),

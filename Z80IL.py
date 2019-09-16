@@ -213,10 +213,13 @@ def expressionify(size, foo, il, temps_are_conds=False):
 #------------------------------------------------------------------------------
 # FLAG LIFTING
 #------------------------------------------------------------------------------
+#        il.append(il.set_flag('z', il.xor_expr(1, il.test_bit(1, operand, mask), il.const(1, 1))))
+#        il.append(il.set_flag('n', il.const(0, 0)))
+#        il.append(il.set_flag('h', il.const(0, 0)))
 
 def gen_flag_il(op, size, write_type, flag, operands, il):
-    if op == LowLevelILOperation.LLIL_SBB:
-        if flag == 'c':
+    if flag == 'c':
+        if op == LowLevelILOperation.LLIL_SBB:
             return il.compare_signed_greater_than(size,
                 il.add(size,
                     expressionify(size, operands[1], il),
@@ -225,32 +228,49 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                 expressionify(size, operands[0], il)
             )
 
-        if flag == 'pv':
+        if op == LowLevelILOperation.LLIL_OR:
+            return il.const(1, 0)
+        if op == LowLevelILOperation.LLIL_ASR:
+            return il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1))
+        if op == LowLevelILOperation.LLIL_RLC:
+            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 0x80))
+        if op == LowLevelILOperation.LLIL_ROL:
+            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 0x80))
+        if op == LowLevelILOperation.LLIL_RRC:
+            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))
+        if op == LowLevelILOperation.LLIL_ROR:
+            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))
+        if op == LowLevelILOperation.LLIL_XOR:
+            return il.const(1, 0)
+
+    if flag == 'pv':
+        if op == LowLevelILOperation.LLIL_SBB:
             a = expressionify(size, operands[0], il)
             b = expressionify(size, operands[1], il)
-            c = expressionify(size, operands[2], il)
-            one = il.const(1, 0)
-            result = il.sub(size, c, il.sub(size, a, b))
+            c = il.flag('c')
+
+            zero = il.const(1, 0)
+            result = il.sub(size, il.sub(size, a, b), c)
             subtrahend = il.add(size, b, c)
 
             return il.or_expr(0,
                 il.and_expr(0,
                     # a>0 && (b+c)<0
                     il.and_expr(0,
-                        il.compare_signed_greater_than(size, a, one),
-                        il.compare_signed_less_than(size, subtrahend, one)
+                        il.compare_signed_greater_than(size, a, zero),
+                        il.compare_signed_less_than(size, subtrahend, zero)
                     ),
                     # (a-(b+c))<0
-                    il.compare_signed_less_than(size, result, one)
+                    il.compare_signed_less_than(size, result, zero)
                 ),
                 il.and_expr(0,
                     # a<0 && (b+c>0
                     il.and_expr(0,
-                        il.compare_signed_less_than(size, a, one),
-                        il.compare_signed_greater_than(size, subtrahend, one)
+                        il.compare_signed_less_than(size, a, zero),
+                        il.compare_signed_greater_than(size, subtrahend, zero)
                     ),
                     # (a-(b+c))>0
-                    il.compare_signed_greater_than(size, result, one)
+                    il.compare_signed_greater_than(size, result, zero)
                 )
             )
 
@@ -286,16 +306,11 @@ def gen_instr_il(addr, decoded, il):
         il.append(tmp)
 
     elif decoded.op == OP.BIT:
-        # tricky:
-        # Z80  syntax: BIT bit_idx, operand     example: bit 0, (IX+6)
-        # LLIL syntax: test_bit operand, mask   example: test_bit(load(add(reg(ix), 6)), 0x1)
         assert oper_type == OPER_TYPE.IMM
         assert oper_val >= 0 and oper_val <= 7
         mask = il.const(1, 1<<oper_val)
         operand = operand_to_il(operb_type, operb_val, il, 1)
-        il.append(il.set_flag('z', il.xor_expr(1, il.test_bit(1, operand, mask), il.const(1, 1))))
-        il.append(il.set_flag('n', il.const(0, 0)))
-        il.append(il.set_flag('h', il.const(0, 0)))
+        il.append(il.and_expr(1, operand, mask, flags='*'))
 
     elif decoded.op == OP.CALL:
         if oper_type == OPER_TYPE.ADDR:
@@ -428,19 +443,30 @@ def gen_instr_il(addr, decoded, il):
             if do_mark:
                 il.mark_label(f)
 
+    elif decoded.op == OP.NOP:
+        il.append(il.nop())
+
     elif decoded.op == OP.OR:
         tmp = il.reg(1, 'A')
-        tmp = il.or_expr(1, operand_to_il(oper_type, oper_val, il, 1), tmp, flags='z')
+        tmp = il.or_expr(1, operand_to_il(oper_type, oper_val, il, 1), tmp, flags='*')
         tmp = il.set_reg(1, 'A', tmp)
         il.append(tmp)
 
     elif decoded.op == OP.POP:
-        fgroup = '*' if oper_val == REG.AF else None
         # possible operands are: af bc de hl ix iy
         size = REG_TO_SIZE[oper_val]
         tmp = il.pop(size)
-        tmp = il.set_reg(size, reg2str(oper_val), tmp, flags=fgroup)
+        tmp = il.set_reg(size, reg2str(oper_val), tmp)
         il.append(tmp)
+
+        if oper_val == REG.AF:
+            f = il.reg(1, 'F')
+            il.append(il.set_flag('s', il.test_bit(1, f, il.const(1, 1<<7))))
+            il.append(il.set_flag('z', il.test_bit(1, f, il.const(1, 1<<6))))
+            il.append(il.set_flag('h', il.test_bit(1, f, il.const(1, 1<<4))))
+            il.append(il.set_flag('pv', il.test_bit(1, f, il.const(1, 1<<2))))
+            il.append(il.set_flag('n', il.test_bit(1, f, il.const(1, 1<<1))))
+            il.append(il.set_flag('c', il.test_bit(1, f, il.const(1, 1))))
 
     elif decoded.op == OP.PUSH:
         # possible operands are: af bc de hl ix iy
