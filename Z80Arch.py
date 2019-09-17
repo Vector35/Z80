@@ -79,85 +79,86 @@ class Z80(Architecture):
 
     stack_pointer = "SP"
 
-    # S - sign, set if the 2-complement value is negative (copy of msb)
-    # Z - zero, set if value is zero
-    # H - half carry, from bit 3 to 4
-    # PV - parity when even number of bits set, overflow if 2-complement result doesn't fit in reg
-    # N - subtract, set if last operation was subtraction
-    # C - set if the result did not fit in register
+#------------------------------------------------------------------------------
+# FLAG fun
+#------------------------------------------------------------------------------
+
     flags = ['s', 'z', 'h', 'pv', 'n', 'c']
 
-#   SpecialFlagRole = 0,
-#   ZeroFlagRole = 1,
-#   PositiveSignFlagRole = 2,
-#   NegativeSignFlagRole = 3,
-#   CarryFlagRole = 4,
-#   OverflowFlagRole = 5,
-#   HalfCarryFlagRole = 6,
-#   EvenParityFlagRole = 7,
-#   OddParityFlagRole = 8,
-#   OrderedFlagRole = 9,
-#   UnorderedFlagRole = 10
-    flag_roles = {
-        's': FlagRole.NegativeSignFlagRole,
-        'z': FlagRole.ZeroFlagRole,
-        'h': FlagRole.HalfCarryFlagRole,
-        'pv': FlagRole.OverflowFlagRole, # actually overflow or parity: TODO: implement later
-        'n': FlagRole.NegativeSignFlagRole,
-        'c': FlagRole.CarryFlagRole
-    }
+    # remember, class None is default/integer
+    semantic_flag_classes = ['class_bitstuff']
 
-#        LLFC_E                  ==         Equal
-#        LLFC_NE                 !=         Not equal
-#        LLFC_SLT                s<         Signed less than
-#        LLFC_ULT                u<         Unsigned less than
-#        LLFC_SLE                s<=        Signed less than or equal
-#        LLFC_ULE                u<=        Unsigned less than or equal
-#        LLFC_SGE                s>=        Signed greater than or equal
-#        LLFC_UGE                u>=        Unsigned greater than or equal
-#        LLFC_SGT                s>         Signed greater than
-#        LLFC_UGT                u>         Unsigned greater than
-#        LLFC_NEG                -          Negative
-#        LLFC_POS                +          Positive
-#        LLFC_O                  overflow   Overflow
-#        LLFC_NO                 !overflow  No overflow
-    flags_required_for_flag_condition = {
-        # S, sign flag is in NEG and POS
-        #LowLevelILFlagCondition.LLFC_NEG: ['s'],
-        #LowLevelILFlagCondition.LLFC_POS: ['s'],
-        # Z, zero flag for == and !=
-        #LowLevelILFlagCondition.LLFC_E: ['z'],
-        #LowLevelILFlagCondition.LLFC_NE: ['z'],
-        # H, half carry for ???
-        # P, parity for ???
-        # s> s>= s< s<= done by sub and overflow test
-        LowLevelILFlagCondition.LLFC_SGT: ['pv'],
-        LowLevelILFlagCondition.LLFC_SGE: ['pv'],
-        LowLevelILFlagCondition.LLFC_SLT: ['pv'],
-        LowLevelILFlagCondition.LLFC_SLE: ['pv'],
-        # N, for these, because it looks like NEGative :P
-        #LowLevelILFlagCondition.LLFC_NEG: ['n'],
-        # C, for these
-        LowLevelILFlagCondition.LLFC_UGE: ['c'],
-        LowLevelILFlagCondition.LLFC_ULT: ['c'],
-    }
-
-    # user defined id's for flag writing groups
-    # eg: '*' writes all flags
-    # eg: 'cvs' writes carry, overflow, sign
-    # these are given to some instruction IL objects as the optional flags='*' argument
-    flag_write_types = ['dummy', '*', 'c', 'z', 'cszpv', 'npv', 'cnz', 'not_c']
-
+    # flag write types and their mappings
+    flag_write_types = ['dummy', '*', 'c', 'z', 'cszpv', 'not_c']
     flags_written_by_flag_write_type = {
         'dummy': [],
         '*': ['s', 'z', 'h', 'pv', 'n', 'c'],
         'c': ['c'],
         'z': ['z'],
-        'cszpv': ['c','s','z','pv'],
-        'npv': ['n','pv'], # eg: sbc
-        'cnz': ['c', 'n', 'z'], #eg: xor
-        'not_c': ['s', 'z', 'h', 'pv', 'n'] # eg: dec byte
+        'not_c': ['s', 'z', 'h', 'pv', 'n'] # eg: z80's DEC
     }
+    semantic_class_for_flag_write_type = {
+        # by default, everything is type None (integer)
+#        '*': 'class_integer',
+#        'c': 'class_integer',
+#        'z': 'class_integer',
+#        'cszpv': 'class_integer',
+#        'not_c': 'class_integer'
+    }
+
+    # groups and their mappings
+    semantic_flag_groups = ['group_e', 'group_ne', 'group_lt']
+    flags_required_for_semantic_flag_group = {
+        'group_lt': ['c'],
+        'group_e': ['z'],
+        'group_ne': ['z']
+    }
+    flag_conditions_for_semantic_flag_group = {
+        #'group_e': {None: LowLevelILFlagCondition.LLFC_E},
+        #'group_ne': {None: LowLevelILFlagCondition.LLFC_NE}
+    }
+
+    # roles
+    flag_roles = {
+        's': FlagRole.NegativeSignFlagRole,
+        'z': FlagRole.ZeroFlagRole,
+        'h': FlagRole.HalfCarryFlagRole,
+        'pv': FlagRole.OverflowFlagRole, # actually overflow or parity: TODO: implement later
+        'n': FlagRole.SpecialFlagRole, # set if last instruction was a subtraction (incl. CP)
+        'c': FlagRole.CarryFlagRole
+    }
+
+    # MAP (condition x class) -> flags
+    def get_flags_required_for_flag_condition(self, cond, sem_class):
+        #LogDebug('incoming cond: %s, incoming sem_class: %s' % (str(cond), str(sem_class)))
+
+        if sem_class == None:
+            lookup = {
+                # Z, zero flag for == and !=
+                LowLevelILFlagCondition.LLFC_E: ['z'],
+                LowLevelILFlagCondition.LLFC_NE: ['z'],
+                # S, sign flag is in NEG and POS
+                LowLevelILFlagCondition.LLFC_NEG: ['s'],
+                # Z, zero flag for == and !=
+                LowLevelILFlagCondition.LLFC_E: ['z'],
+                LowLevelILFlagCondition.LLFC_NE: ['z'],
+                # H, half carry for ???
+                # P, parity for ???
+                # s> s>= s< s<= done by sub and overflow test
+                #if cond == LowLevelILFlagCondition.LLFC_SGT:
+                #if cond == LowLevelILFlagCondition.LLFC_SGE:
+                #if cond == LowLevelILFlagCondition.LLFC_SLT:
+                #if cond == LowLevelILFlagCondition.LLFC_SLE:
+
+                # C, for these
+                LowLevelILFlagCondition.LLFC_UGE: ['c'],
+                LowLevelILFlagCondition.LLFC_ULT: ['c']
+            }
+
+            if cond in lookup:
+                return lookup[cond]
+
+        return []
 
 #------------------------------------------------------------------------------
 # CFG building

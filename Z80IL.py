@@ -67,9 +67,11 @@ def jcc_to_flag_cond(cond, il):
 
     # {'z', 'nz'} == {'zero', 'not zero'}
     if cond == CC.Z:
-        return il.flag('z')
+        return il.flag_condition(LowLevelILFlagCondition.LLFC_E)
+        #return il.flag('z')
     if cond == CC.NOT_Z:
-        return il.not_expr(0, il.flag('z'))
+        return il.flag_condition(LowLevelILFlagCondition.LLFC_NE)
+        #return il.not_expr(0, il.flag('z'))
 
     # {'c', 'nc'} == {'carry', 'not carry'}
     if cond == CC.C:
@@ -115,12 +117,12 @@ def append_conditional_instr(cond, instr, il):
     else:
         t = LowLevelILLabel()
         f = LowLevelILLabel()
-        if cond in CC_UN_NOT:
-            ant = jcc_to_flag_cond(CC_UN_NOT[cond], il)
-            il.append(il.if_expr(ant, f, t))
-        else:
-            ant = jcc_to_flag_cond(cond, il)
-            il.append(il.if_expr(ant, t, f))
+        #if cond in CC_UN_NOT:
+        #    ant = jcc_to_flag_cond(CC_UN_NOT[cond], il)
+        #    il.append(il.if_expr(ant, f, t))
+        #else:
+        ant = jcc_to_flag_cond(cond, il)
+        il.append(il.if_expr(ant, t, f))
         il.mark_label(t)
         il.append(instr)
         il.mark_label(f)
@@ -136,12 +138,12 @@ def append_conditional_jump(cond, target_type, target_val, addr_fallthru, il):
         t = il.get_label_for_address(Architecture['Z80'], target_val)
         f = il.get_label_for_address(Architecture['Z80'], addr_fallthru)
         if t and f:
-            if cond in CC_UN_NOT:
-                ant = jcc_to_flag_cond(CC_UN_NOT[cond], il)
-                il.append(il.if_expr(ant, f, t))
-            else:
-                ant = jcc_to_flag_cond(cond, il)
-                il.append(il.if_expr(ant, t, f))
+            #if cond in CC_UN_NOT:
+            #    ant = jcc_to_flag_cond(CC_UN_NOT[cond], il)
+            #    il.append(il.if_expr(ant, f, t))
+            #else:
+            ant = jcc_to_flag_cond(cond, il)
+            il.append(il.if_expr(ant, t, f))
             return
 
     # case: conditional and address available
@@ -273,6 +275,18 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                     il.compare_signed_greater_than(size, result, zero)
                 )
             )
+    if flag == 's':
+        if op == LowLevelILOperation.LLIL_SBB:
+            return il.compare_signed_less_than(size,
+                il.add(size,
+                    expressionify(size, operands[0], il),
+                    il.add(size,
+                        expressionify(size, operands[1], il),
+                        il.flag('c')
+                    )
+                ),
+                il.const(1, 0)
+            )
 
     return None
 
@@ -320,13 +334,13 @@ def gen_instr_il(addr, decoded, il):
             il.append(il.unimplemented())
 
     elif decoded.op == OP.CCF:
-        il.append(il.set_flag('c', il.xor_expr(1, il.flag('c'), il.const(1, 1))))
+        il.append(il.set_flag('c', il.not_expr(0, il.flag('c'))))
 
     elif decoded.op == OP.CP:
         # sub, but do not write to register
         lhs = il.reg(1, 'A')
         rhs = operand_to_il(oper_type, oper_val, il, 1)
-        sub = il.sub(1, lhs, rhs, flags='cszpv')
+        sub = il.sub(1, lhs, rhs, flags='*')
         il.append(sub)
 
     elif decoded.op == OP.DJNZ:
@@ -608,7 +622,7 @@ def gen_instr_il(addr, decoded, il):
 
     elif decoded.op == OP.XOR:
         tmp = il.reg(1, 'A')
-        tmp = il.xor_expr(1, operand_to_il(oper_type, oper_val, il, 1), tmp, flags='cnz')
+        tmp = il.xor_expr(1, operand_to_il(oper_type, oper_val, il, 1), tmp, flags='*')
         tmp = il.set_reg(1, 'A', tmp)
         il.append(tmp)
 
