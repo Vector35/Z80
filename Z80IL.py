@@ -278,12 +278,12 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
     if flag == 's':
         if op == LowLevelILOperation.LLIL_SBB:
             return il.compare_signed_less_than(size,
-                il.add(size,
-                    expressionify(size, operands[0], il),
-                    il.add(size,
+                il.sub(size,
+                    il.sub(size,
+                        expressionify(size, operands[0], il),
                         expressionify(size, operands[1], il),
-                        il.flag('c')
-                    )
+                    ),
+                    il.flag('c')
                 ),
                 il.const(1, 0)
             )
