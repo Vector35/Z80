@@ -245,6 +245,14 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
 
+    if flag == 'h':
+        if op == LowLevelILOperation.LLIL_XOR:
+            return il.const(1, 0)
+
+    if flag == 'n':
+        if op == LowLevelILOperation.LLIL_XOR:
+            return il.const(1, 0)
+
     if flag == 'pv':
         if op == LowLevelILOperation.LLIL_SBB:
             a = expressionify(size, operands[0], il)
@@ -275,6 +283,11 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                     il.compare_signed_greater_than(size, result, zero)
                 )
             )
+
+        if op == LowLevelILOperation.LLIL_XOR:
+            # TODO: implement real parity
+            return il.const(1, 0)
+
     if flag == 's':
         if op == LowLevelILOperation.LLIL_SBB:
             return il.compare_signed_less_than(size,
@@ -284,6 +297,16 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                         expressionify(size, operands[1], il),
                     ),
                     il.flag('c')
+                ),
+                il.const(1, 0)
+            )
+
+    if flag == 'z':
+        if op == LowLevelILOperation.LLIL_XOR:
+            return il.compare_equal(size,
+                il.xor_expr(size,
+                    expressionify(size, operands[0], il),
+                    expressionify(size, operands[1], il),
                 ),
                 il.const(1, 0)
             )
