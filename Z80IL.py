@@ -68,10 +68,8 @@ def jcc_to_flag_cond(cond, il):
     # {'z', 'nz'} == {'zero', 'not zero'}
     if cond == CC.Z:
         return il.flag_condition(LowLevelILFlagCondition.LLFC_E)
-        #return il.flag('z')
     if cond == CC.NOT_Z:
         return il.flag_condition(LowLevelILFlagCondition.LLFC_NE)
-        #return il.not_expr(0, il.flag('z'))
 
     # {'c', 'nc'} == {'carry', 'not carry'}
     if cond == CC.C:
@@ -234,6 +232,8 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             return il.const(1, 0)
         if op == LowLevelILOperation.LLIL_ASR:
             return il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1))
+        if op == LowLevelILOperation.LLIL_POP:
+            return il.set_flag('c', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1)))
         if op == LowLevelILOperation.LLIL_RLC:
             return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 0x80))
         if op == LowLevelILOperation.LLIL_ROL:
@@ -246,10 +246,14 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             return il.const(1, 0)
 
     if flag == 'h':
+        if op == LowLevelILOperation.LLIL_POP:
+            return il.set_flag('h', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<4)))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
 
     if flag == 'n':
+        if op == LowLevelILOperation.LLIL_POP:
+            return il.set_flag('n', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<1)))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
 
@@ -284,11 +288,17 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                 )
             )
 
+        if op == LowLevelILOperation.LLIL_POP:
+            return il.set_flag('pv', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<2)))
+
         if op == LowLevelILOperation.LLIL_XOR:
             # TODO: implement real parity
             return il.const(1, 0)
 
     if flag == 's':
+        if op == LowLevelILOperation.LLIL_POP:
+            return il.set_flag('s', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<7)))
+
         if op == LowLevelILOperation.LLIL_SBB:
             return il.compare_signed_less_than(size,
                 il.sub(size,
@@ -330,7 +340,7 @@ def gen_instr_il(addr, decoded, il):
             if decoded.op == OP.ADD:
                 tmp = il.add(size, lhs, rhs, flags='*')
             else:
-                tmp = il.add_carry(size, lhs, rhs, il.flag("c"), flags='c')
+                tmp = il.add_carry(size, lhs, rhs, il.flag("c"), flags='*')
             tmp = il.set_reg(size, reg2str(oper_val), tmp)
             il.append(tmp)
         else:
@@ -491,19 +501,12 @@ def gen_instr_il(addr, decoded, il):
 
     elif decoded.op == OP.POP:
         # possible operands are: af bc de hl ix iy
+        flag_write_type = '*' if oper_val == REG.AF else None
+
         size = REG_TO_SIZE[oper_val]
         tmp = il.pop(size)
-        tmp = il.set_reg(size, reg2str(oper_val), tmp)
+        tmp = il.set_reg(size, reg2str(oper_val), tmp, flag_write_type)
         il.append(tmp)
-
-        if oper_val == REG.AF:
-            f = il.reg(1, 'F')
-            il.append(il.set_flag('s', il.test_bit(1, f, il.const(1, 1<<7))))
-            il.append(il.set_flag('z', il.test_bit(1, f, il.const(1, 1<<6))))
-            il.append(il.set_flag('h', il.test_bit(1, f, il.const(1, 1<<4))))
-            il.append(il.set_flag('pv', il.test_bit(1, f, il.const(1, 1<<2))))
-            il.append(il.set_flag('n', il.test_bit(1, f, il.const(1, 1<<1))))
-            il.append(il.set_flag('c', il.test_bit(1, f, il.const(1, 1))))
 
     elif decoded.op == OP.PUSH:
         # possible operands are: af bc de hl ix iy
