@@ -1,4 +1,4 @@
-# Z80 Architecture Plugin (v1.1)
+# Z80 Architecture Plugin (v1.2)
 Author: **Vector 35 Inc**
 _Sample Z80 architecture plugin written to accompany the <a href='https://binary.ninja/2020/01/08/guide-to-architecture-plugins-part1.html'>introductory blog post</a>._
 ## Description:
