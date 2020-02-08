@@ -14,6 +14,7 @@ class ColecoView(BinaryView):
 	@classmethod
 	def is_valid_cartridge_header(self, data):
 		# data is a string
+		if len(data) < 12: return False
 		(cart, local_spr_tbl, _, _, _, start_game) = unpack('<HHHHHH', data)
 		if not cart in [0xAA55, 0x55AA]: return False
 		if (start_game & 0xF000) != 0x8000: return False
