@@ -9,7 +9,7 @@ from binaryninja.log import log_info
 from binaryninja.architecture import Architecture
 from binaryninja.enums import LowLevelILOperation, LowLevelILFlagCondition
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
-from binaryninja.lowlevelil import LowLevelILLabel, ILRegister, ILFlag, LLIL_TEMP, LLIL_GET_TEMP_REG_INDEX, LowLevelILExpr
+from binaryninja.lowlevelil import LowLevelILLabel, ILRegister, ILFlag, LLIL_TEMP, LLIL_GET_TEMP_REG_INDEX
 
 # decode/disassemble
 from z80dis.z80 import *
@@ -189,14 +189,15 @@ def operand_to_il(oper_type, oper_val, il, size_hint=0, peel_load=False):
 def expressionify(size, foo, il, temps_are_conds=False):
     """ turns the "reg or constant"  operands to get_flag_write_low_level_il()
         into lifted expressions """
-    if isinstance(foo, LowLevelILExpr):
+    if isinstance(foo, int):
         return foo
 
     if isinstance(foo, ILRegister):
+        # LowLevelILExpr is different than ILRegister
         if temps_are_conds and LLIL_TEMP(foo.index):
             # can't use il.reg() 'cause it will do lookup in architecture flags
-            return il.expr(LowLevelILOperation.LLIL_FLAG, foo.index)
-            #return il.reg(size, 'cond:%d' % LLIL_GET_TEMP_REG_INDEX(foo.index))
+            return il.expr(LowLevelILOperation.LLIL_FLAG, foo)
+            #return il.reg(size, 'cond:%d' % LLIL_GET_TEMP_REG_INDEX(foo))
 
         # promote it to an LLIL_REG (read register)
         return il.reg(size, foo)
@@ -398,7 +399,7 @@ def gen_instr_il(addr, decoded, il):
         # temp0 = lhs
         il.append(il.expr(LowLevelILOperation.LLIL_SET_REG,
             LLIL_TEMP(0),
-            operand_to_il(oper_type, oper_val, il, 2).index,
+            operand_to_il(oper_type, oper_val, il, 2),
             size = 2
         ))
 
