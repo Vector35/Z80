@@ -442,7 +442,21 @@ class Z80(Architecture):
                 if oper_type == OPER_TYPE.REG:
                     subexpr = il.reg(REG_TO_SIZE[oper_val], reg2str(oper_val))
                     expr = il.push(REG_TO_SIZE[oper_val], subexpr)
+        elif decoded.op == OP.LD:
+            (oper_type, oper_val) = decoded.operands[0]
+            (operb_type, operb_val) = decoded.operands[1]
 
+            if oper_type == OPER_TYPE.REG:
+                size = REG_TO_SIZE[oper_val]
+                subexpr = None
+
+                if oper_type == OPER_TYPE.REG and operb_type == OPER_TYPE.IMM:
+                    if size == 2 and operb_val != 0:
+                        subexpr = il.const_pointer(2, operb_val)
+                    else:
+                        subexpr = il.const(size, operb_val)
+
+                    expr = il.set_reg(size, reg2str(oper_val), subexpr)
         if not expr:
             expr = il.unimplemented()
 
