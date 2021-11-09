@@ -15,6 +15,34 @@ CC_TO_STR = {
     CC.NOT_H:'nh', CC.H:'h'
 }
 
+REG_TO_SIZE = {
+    REG.A:1, REG.F:1,
+    REG.B:1, REG.C:1,
+    REG.D:1, REG.E:1,
+    REG.H:1, REG.L:1,
+    REG.AF:2,
+    REG.BC:2,
+    REG.DE:2,
+    REG.HL:2,
+
+    REG.A_:1, REG.F_:1,
+    REG.B_:1, REG.C_:1,
+    REG.D_:1, REG.E_:1,
+    REG.H_:1, REG.L_:1,
+    REG.AF_:2,
+    REG.BC_:2,
+    REG.DE_:2,
+    REG.HL_:2,
+
+    REG.I:1, REG.R:1,
+    REG.IXH:1, REG.IXL:1,
+    REG.IYH:1, REG.IYL:1,
+    REG.IY:2,
+    REG.IX:2,
+    REG.SP:2,
+    REG.PC:2
+}
+
 class Z80(Architecture):
     name = 'Z80'
 
@@ -408,7 +436,14 @@ class Z80(Architecture):
 
         if decoded.op == OP.NOP:
             expr = il.nop()
-        else:
+        elif decoded.op == OP.PUSH:
+            if decoded.operands:
+                (oper_type, oper_val) = decoded.operands[0]
+                if oper_type == OPER_TYPE.REG:
+                    subexpr = il.reg(REG_TO_SIZE[oper_val], reg2str(oper_val))
+                    expr = il.push(REG_TO_SIZE[oper_val], subexpr)
+
+        if not expr:
             expr = il.unimplemented()
 
         il.append(expr)
