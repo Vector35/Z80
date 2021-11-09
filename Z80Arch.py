@@ -450,13 +450,20 @@ class Z80(Architecture):
                 size = REG_TO_SIZE[oper_val]
                 subexpr = None
 
-                if oper_type == OPER_TYPE.REG and operb_type == OPER_TYPE.IMM:
+                if operb_type == OPER_TYPE.IMM:
                     if size == 2 and operb_val != 0:
                         subexpr = il.const_pointer(2, operb_val)
                     else:
                         subexpr = il.const(size, operb_val)
 
                     expr = il.set_reg(size, reg2str(oper_val), subexpr)
+
+            elif oper_type == OPER_TYPE.ADDR_DEREF:
+                if operb_type == OPER_TYPE.REG:
+                    size = REG_TO_SIZE[operb_val]
+                    subexpr_a = il.const_pointer(size, oper_val)
+                    subexpr_b = il.reg(size, reg2str(operb_val))
+                    expr = il.store(size, subexpr_a, subexpr_b)
         if not expr:
             expr = il.unimplemented()
 
