@@ -7,8 +7,6 @@ from binaryninja.architecture import Architecture
 from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
 from binaryninja.enums import InstructionTextTokenType, BranchType, FlagRole, LowLevelILFlagCondition
 
-from . import Z80IL
-
 from z80dis.z80 import *
 
 CC_TO_STR = {
@@ -401,19 +399,6 @@ class Z80(Architecture):
 # LIFTING
 #------------------------------------------------------------------------------
 
-    def get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il):
-        flag_il = Z80IL.gen_flag_il(op, size, write_type, flag, operands, il)
-        if flag_il:
-            return flag_il
-
-        return Architecture.get_flag_write_low_level_il(self, op, size, write_type, flag, operands, il)
-
     def get_instruction_low_level_il(self, data, addr, il):
-        decoded = decode(data, addr)
-        if decoded.status != DECODE_STATUS.OK or decoded.len == 0:
-            return None
-
-        Z80IL.gen_instr_il(addr, decoded, il)
-
-        return decoded.len
+        return None
 
