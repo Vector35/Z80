@@ -400,5 +400,12 @@ class Z80(Architecture):
 #------------------------------------------------------------------------------
 
     def get_instruction_low_level_il(self, data, addr, il):
-        return None
+        decoded = decode(data, addr)
+        if decoded.status != DECODE_STATUS.OK or decoded.len == 0:
+            return None
+
+        expr = il.unimplemented()
+        il.append(expr)
+
+        return decoded.len
 
