@@ -404,7 +404,13 @@ class Z80(Architecture):
         if decoded.status != DECODE_STATUS.OK or decoded.len == 0:
             return None
 
-        expr = il.unimplemented()
+        expr = None
+
+        if decoded.op == OP.NOP:
+            expr = il.nop()
+        else:
+            expr = il.unimplemented()
+
         il.append(expr)
 
         return decoded.len
