@@ -475,12 +475,40 @@ class Z80(Architecture):
             expr = il.nop()
 
         elif decoded.op == OP.PUSH:
-            if decoded.operands:
-                (oper_type, oper_val) = decoded.operands[0]
-                if oper_type == OPER_TYPE.REG:
-                    size = REG_TO_SIZE[oper_val]
-                    subexpr = self.operand_to_il(oper_type, oper_val, il, size)
-                    expr = il.push(size, subexpr)
+            (oper_type, oper_val) = decoded.operands[0]
+
+            # when pushing AF, actually push the flags
+            if oper_val == REG.AF:
+                # lo byte F first
+                expr = il.push(2,
+                    il.or_expr(2,
+                        il.shift_left(2,
+                            il.reg(1, 'A'),
+                            il.const(1, 8)
+                        ),
+                        il.or_expr(1,
+                            il.or_expr(1,
+                                il.shift_left(1, il.flag('s'), il.const(1, 7)),
+                                il.shift_left(1, il.flag('z'), il.const(1, 6))
+                            ),
+                            il.or_expr(1,
+                                il.or_expr(1,
+                                    il.shift_left(1, il.flag('h'), il.const(1, 4)),
+                                    il.shift_left(1, il.flag('pv'), il.const(1, 2))
+                                ),
+                                il.or_expr(1,
+                                    il.shift_left(1, il.flag('n'), il.const(1, 1)),
+                                    il.flag('c')
+                                )
+                            )
+                        )
+                    )
+                )
+            # normal push
+            elif oper_type == OPER_TYPE.REG:
+                size = REG_TO_SIZE[oper_val]
+                subexpr = self.operand_to_il(oper_type, oper_val, il, size)
+                expr = il.push(size, subexpr)
 
         elif decoded.op == OP.LD:
             (oper_type, oper_val) = decoded.operands[0]
