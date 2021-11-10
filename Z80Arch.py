@@ -426,6 +426,43 @@ class Z80(Architecture):
 #------------------------------------------------------------------------------
 # LIFTING
 #------------------------------------------------------------------------------
+    def operand_to_il(self, oper_type, oper_val, il, size_hint=0, ignore_load=False):
+        if oper_type == OPER_TYPE.REG:
+            return il.reg(REG_TO_SIZE[oper_val], reg2str(oper_val))
+
+        elif oper_type == OPER_TYPE.REG_DEREF:
+            tmp = operand_to_il(OPER_TYPE.REG, oper_val, il, size_hint)
+            if ignore_load:
+                return tmp
+            else:
+                return il.load(size_hint, tmp)
+
+        elif oper_type == OPER_TYPE.ADDR:
+            return il.const_pointer(2, oper_val)
+
+        elif oper_type == OPER_TYPE.ADDR_DEREF:
+            tmp = il.const_pointer(2, oper_val)
+            if ignore_load:
+                return tmp
+            else:
+                return il.load(size_hint, tmp)
+
+        elif oper_type in [OPER_TYPE.MEM_DISPL_IX, OPER_TYPE.MEM_DISPL_IY]:
+            reg_name = 'IX' if oper_type == OPER_TYPE.MEM_DISPL_IX else 'IY'
+            tmp = il.add(2, il.reg(2, reg_name), il.const(1, oper_val))
+            if ignore_load:
+                return tmp
+            else:
+                return il.load(size_hint, tmp)
+
+        elif oper_type == OPER_TYPE.IMM:
+            return il.const(size_hint, oper_val)
+
+        elif oper_type == OPER_TYPE.COND:
+            return il.unimplemented()
+
+        else:
+            raise Exception("unknown operand type: " + str(oper_type))
 
     def get_instruction_low_level_il(self, data, addr, il):
         decoded = decode(data, addr)
@@ -436,12 +473,15 @@ class Z80(Architecture):
 
         if decoded.op == OP.NOP:
             expr = il.nop()
+
         elif decoded.op == OP.PUSH:
             if decoded.operands:
                 (oper_type, oper_val) = decoded.operands[0]
                 if oper_type == OPER_TYPE.REG:
-                    subexpr = il.reg(REG_TO_SIZE[oper_val], reg2str(oper_val))
-                    expr = il.push(REG_TO_SIZE[oper_val], subexpr)
+                    size = REG_TO_SIZE[oper_val]
+                    subexpr = self.operand_to_il(oper_type, oper_val, il, size)
+                    expr = il.push(size, subexpr)
+
         elif decoded.op == OP.LD:
             (oper_type, oper_val) = decoded.operands[0]
             (operb_type, operb_val) = decoded.operands[1]
@@ -461,9 +501,10 @@ class Z80(Architecture):
             elif oper_type == OPER_TYPE.ADDR_DEREF:
                 if operb_type == OPER_TYPE.REG:
                     size = REG_TO_SIZE[operb_val]
-                    subexpr_a = il.const_pointer(size, oper_val)
-                    subexpr_b = il.reg(size, reg2str(operb_val))
-                    expr = il.store(size, subexpr_a, subexpr_b)
+                    src = self.operand_to_il(operb_type, operb_val, il, size)
+                    dst = self.operand_to_il(oper_type, oper_val, il, size, True)
+                    il.append(il.store(size, dst, src))
+
         if not expr:
             expr = il.unimplemented()
 
