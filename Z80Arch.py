@@ -469,13 +469,31 @@ class Z80(Architecture):
         if decoded.status != DECODE_STATUS.OK or decoded.len == 0:
             return None
 
+        (oper_type, oper_val) = decoded.operands[0] if decoded.operands else (None, None)
+        (operb_type, operb_val) = decoded.operands[1] if decoded.operands[1:] else (None, None)
+
         expr = None
 
         if decoded.op == OP.NOP:
             expr = il.nop()
 
+        elif decoded.op == OP.CALL:
+            if oper_type == OPER_TYPE.ADDR:
+                expr = il.call(il.const_pointer(2, oper_val))
+
+        elif decoded.op == OP.RET:
+            if oper_type == None:
+                expr = il.ret(il.pop(2))
+
+        elif decoded.op in [OP.JP, OP.JR]:
+            if oper_type == OPER_TYPE.ADDR:
+                tmp = il.get_label_for_address(Architecture['Z80'], oper_val)
+                if tmp:
+                    expr = il.goto(tmp)
+                else:
+                    expr = il.jump(il.const_pointer(2, oper_val))
+
         elif decoded.op == OP.PUSH:
-            (oper_type, oper_val) = decoded.operands[0]
 
             # when pushing AF, actually push the flags
             if oper_val == REG.AF:
@@ -511,9 +529,6 @@ class Z80(Architecture):
                 expr = il.push(size, subexpr)
 
         elif decoded.op == OP.LD:
-            (oper_type, oper_val) = decoded.operands[0]
-            (operb_type, operb_val) = decoded.operands[1]
-
             if oper_type == OPER_TYPE.REG:
                 size = REG_TO_SIZE[oper_val]
                 subexpr = None
