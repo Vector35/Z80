@@ -1,26 +1,35 @@
 {
     "pluginmetadataversion": 2,
     "name": "Z80 Architecture Plugin",
-    "type": ["architecture" ],
-    "api": ["python2", "python3"],
+    "type": [
+        "architecture"
+    ],
+    "api": [
+        "python2",
+        "python3"
+    ],
     "description": "Sample Z80 architecture plugin written to accompany the <a href='https://binary.ninja/2020/01/08/guide-to-architecture-plugins-part1.html'>introductory blog post</a>.",
     "longdescription": "<p>This Z80 architecture plugin was originally written as an example architecture to introduce how to easily add support to Binary Ninja for any new architecture given an existing disassembly library. It originally used the <a href='https://skoolkit.ca/'>SchoolKit</a> python library as a disassembler, but later was updated to work with a <a href='https://github.com/lwerdna/z80dis'>dedicated library</a>.</p><p>This repository has several checkpoints from the <a href='https://binary.ninja/2020/01/08/guide-to-architecture-plugins-part1.html'>blog post</a> that are associated with specific comments.</p>",
     "license": {
-            "name": "MIT",
-            "text": "Copyright (c) 2017 Vector 35 Inc\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
-
+        "name": "MIT",
+        "text": "Copyright (c) 2017 Vector 35 Inc\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
     },
-    "platforms": ["Windows", "Linux", "Darwin"],
-    "installinstructions" : {
-            "Windows":"The built-in Python 2.7 currently included in Windows builds can't easily have additional dependencies installed. We recommend installing a 64-bit version of python, using the native pip functionality to install the z80dis module (and skoolkit if using the previous checkpoints).",
-            "Linux":"pip install z80dis;pip3 install z80dis",
-            "Darwin":"pip install z80dis;pip3 install z80dis"
+    "platforms": [
+        "Windows",
+        "Linux",
+        "Darwin"
+    ],
+    "installinstructions": {
+        "Windows": "The built-in Python 2.7 currently included in Windows builds can't easily have additional dependencies installed. We recommend installing a 64-bit version of python, using the native pip functionality to install the z80dis module (and skoolkit if using the previous checkpoints).",
+        "Linux": "pip install z80dis;pip3 install z80dis",
+        "Darwin": "pip install z80dis;pip3 install z80dis"
     },
     "dependencies": {
-        		"pip": ["z80dis"]
+        "pip": [
+            "z80dis"
+        ]
     },
-    "version": "1.2",
+    "version": "1.3",
     "author": "Vector 35 Inc",
     "minimumbinaryninjaversion": 776
 }
-
