@@ -70,6 +70,12 @@ class Z80(Architecture):
         'I': RegisterInfo('I', 1),
         'R': RegisterInfo('R', 1),
 
+        # other registers (sub)
+        'IXH': RegisterInfo("IX", 1, 1),
+        'IXL': RegisterInfo("IX", 1, 0),
+        'IYH': RegisterInfo("IY", 1, 1),
+        'IYL': RegisterInfo("IY", 1, 0),
+
         # program counter
         'PC': RegisterInfo('PC', 2),
 

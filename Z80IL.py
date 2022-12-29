@@ -196,7 +196,7 @@ def expressionify(size, foo, il, temps_are_conds=False):
         # LowLevelILExpr is different than ILRegister
         if temps_are_conds and LLIL_TEMP(foo.index):
             # can't use il.reg() 'cause it will do lookup in architecture flags
-            return il.expr(LowLevelILOperation.LLIL_FLAG, foo)
+            return il.expr(LowLevelILOperation.LLIL_FLAG, foo.index)
             #return il.reg(size, 'cond:%d' % LLIL_GET_TEMP_REG_INDEX(foo))
 
         # promote it to an LLIL_REG (read register)
@@ -559,8 +559,8 @@ def gen_instr_il(addr, decoded, il):
         elif oper_type == OPER_TYPE.REG:
             il.append(il.set_reg(1, reg2str(oper_val), rot))
         else:
-            tmp = operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
-            il.append(il.store(1, tmp2, tmp))
+            tmp2 = operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
+            il.append(il.store(1, tmp2, rot))
 
     elif decoded.op in [OP.RLC, OP.RLCA]:
         # rotate and COPY to carry: b0=c, c=b8
@@ -577,8 +577,8 @@ def gen_instr_il(addr, decoded, il):
         elif oper_type == OPER_TYPE.REG:
             il.append(il.set_reg(1, reg2str(oper_val), rot))
         else:
-            tmp = operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
-            il.append(il.store(1, tmp2, tmp))
+            tmp2 = operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
+            il.append(il.store(1, tmp2, rot))
 
     elif decoded.op == OP.RET:
         tmp = il.ret(il.pop(2))
