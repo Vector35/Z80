@@ -1,11 +1,7 @@
 #!/usr/bin/env python
 
-from z80dis.z80 import *
-from struct import pack
-from binascii import hexlify
-
-ADDR = 0xDEAD
-
+import re
+import sys
 import binaryninja
 
 arch = None
@@ -20,17 +16,52 @@ def disasm_binja(data, addr):
     strs = map(lambda x: x.text, toks)
     return ''.join(strs)
 
-def disasm_z80dis(data, addr):
-    return disasm(data, addr)
+def is_num(x):
+    return bool(re.match(r'^[A-Fa-f0-9]+$', x))
 
-for i in range(65536):
-    data = pack('>H', i) + b'\xAB\xCD\xEF\x00'
+def tok_vals(x):
+    result = set()
+    if x.startswith('$'):
+        x = x[1:]
+    if x.startswith('0x'):
+        x = x[2:]
+    if re.match(r'^[A-Fa-f0-9]+$', x):
+        result.add(int(x, 16))
+    if re.match(r'^[0-9]+$', x):
+        result.add(int(x, 10))
+    return result
 
-    a = disasm_binja(data, ADDR)
-    b = disasm_z80dis(data, ADDR)
+def is_token_equal(a, b):
+    a_vals = tok_vals(a)
+    if a_vals:
+        b_vals = tok_vals(b)
+        if b_vals:
+            return bool(a_vals.intersection(b_vals))
 
-    hexstr = hexlify(data[0:6]).decode('utf-8')
-    print('%04X: %s -%s- -%s-' % (ADDR, hexstr.ljust(16), a, b))
+    return a == b
 
-    assert a == b
+def is_disasm_equal(a, b):
+    toks_a = re.split(' |,', a)
+    toks_b = re.split(' |,', b)
 
+    if len(toks_a) != len(toks_b):
+        return False
+
+    return all(is_token_equal(ta, tb) for (ta,tb) in zip(toks_a, toks_b))
+
+if __name__ == '__main__':
+    ADDR = 0
+    with open('./disasm65536.txt') as fp:
+        for line in fp.readlines():
+            # eg: "00 0B 00 00: NOP"
+            (b0,b1,b2,b3,expected) = re.match(r'^(..) (..) (..) (..): (.*)\n$', line).group(1,2,3,4,5)
+            data = b''.join([int(x,16).to_bytes(1,'big') for x in [b0,b1,b2,b3]])
+
+            distxt = disasm_binja(data, ADDR)
+
+            #print(f'{ADDR:04X}: {data.hex()} {a}')
+            print(f'{data.hex()} {distxt}')
+
+            if not is_disasm_equal(distxt, expected):
+                print(f'expected {expected}')
+                sys.exit(-1)

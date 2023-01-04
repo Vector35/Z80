@@ -1,7 +1,7 @@
 # Z80 Architecture Plugin (v1.3)
 Author: **Vector 35 Inc**
 
-_Sample Z80 architecture plugin written to accompany the <a href='https://binary.ninja/2020/01/08/guide-to-architecture-plugins-part1.html'>introductory blog post</a>._
+_Sample Z80 architecture plugin written to accompany [A Guide to Architecture Plugins](https://binary.ninja/2020/01/08/guide-to-architecture-plugins-part1.html)_.
 
 ## Description:
 
@@ -10,25 +10,25 @@ _Sample Z80 architecture plugin written to accompany the <a href='https://binary
 
 ## Installation Instructions
 
+This architecture can be installed from the [plugin manager](https://docs.binary.ninja/guide/plugins.html) or by manually copying the contents of this repo (or symlinking) to your [plugin path](https://docs.binary.ninja/guide/index.html#using-plugins).
+
 ### Windows
 
 The built-in Python 2.7 currently included in Windows builds can't easily have additional dependencies installed. We recommend installing a 64-bit version of python, using the native pip functionality to install the z80dis module (and skoolkit if using the previous checkpoints).
 
 ### Linux
 
-pip install z80dis;pip3 install z80dis
+`pip install z80dis`
 
 ### Darwin
 
-pip install z80dis;pip3 install z80dis
+`pip install z80dis`
 
 ## Minimum Version
 
 This plugin requires the following minimum version of Binary Ninja:
 
 * 776
-
-
 
 ## Required Dependencies
 
