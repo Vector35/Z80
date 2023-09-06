@@ -66,12 +66,12 @@ class ColecoView(BinaryView):
 			0x1F6D:'REFLECT_HORIZONTAL', 0x1F70:'ROTATE_90', 0x1F73:'ENLARGE',
 			0x1F76:'CONTROLLER_SCAN', 0x1F79:'DECODER', 0x1F7C:'GAME_OPT',
 			0x1F7F:'LOAD_ASCII', 0x1F82:'FILL_VRAM', 0x1F85:'MODE_1',
-			0x1F88:'UPDATE_SPINNER', 0x1F8B:'INIT_TABLE', 0x1F8E:'GET_VRAM',
-			0x1F91:'PUT_VRAM', 0x1F94:'INIT_SPR_ORDER', 0x1F97:'WR_SPR_NM_TBL',
-			0x1F9A:'INIT_TIMER', 0x1F9D:'FREE_SIGNAL', 0x1FA0:'REQUEST_SIGNAL',
-			0x1FA3:'TEST_SIGNAL', 0x1FA6:'WRITE_REGISTER', 0x1FA9:'WRITE_VRAM',
-			0x1FAC:'READ_VRAM', 0x1FAF:'INIT_WRITER', 0x1FB2:'SOUND_INIT',
-			0x1FB5:'PLAY_IT', 0x1FB8:'INIT_TABLE', 0x1FBB:'GET_VRAM',
+			0x1F88:'UPDATE_SPINNER', 0x1F8B:'INIT_TABLEP', 0x1F8E:'GET_VRAMP',
+			0x1F91:'PUT_VRAMP', 0x1F94:'INIT_SPR_ORDERP', 0x1F97:'WR_SPR_NM_TBLP',
+			0x1F9A:'INIT_TIMERP', 0x1F9D:'FREE_SIGNALP', 0x1FA0:'REQUEST_SIGNALP',
+			0x1FA3:'TEST_SIGNALP', 0x1FA6:'WRITE_REGISTERP', 0x1FA9:'WRITE_VRAMP',
+			0x1FAC:'READ_VRAMP', 0x1FAF:'INIT_WRITERP', 0x1FB2:'SOUND_INITP',
+			0x1FB5:'PLAY_ITP', 0x1FB8:'INIT_TABLE', 0x1FBB:'GET_VRAM',
 			0x1FBE:'PUT_VRAM', 0x1FC1:'INIT_SPR_ORDER', 0x1FC4:'WR_SPR_NM_TBL',
 			0x1FC7:'INIT_TIMER', 0x1FCA:'FREE_SIGNAL', 0x1FCD:'REQUEST_SIGNAL',
 			0x1FD0:'TEST_SIGNAL', 0x1FD3:'TIME_MGR', 0x1FD6:'TURN_OFF_SOUND',
@@ -82,8 +82,8 @@ class ColecoView(BinaryView):
 			0x1FFD:'RAND_GEN'}
 
 		for addr,name in syms_os.items():
-			self.define_auto_symbol(Symbol(SymbolType.FunctionSymbol, addr, name))
-			self.add_function(addr)
+			self.define_auto_symbol(Symbol(SymbolType.ImportedFunctionSymbol, addr, name))
+			#self.add_function(addr)
 
 		# cartridge header
 		syms_cart_data = {
@@ -167,3 +167,6 @@ class ColecoView(BinaryView):
 
 	def perform_get_entry_point(self):
 		return 0
+
+	def perform_get_address_size(self):
+	    return 2
