@@ -345,6 +345,7 @@ def gen_instr_il(addr, decoded, il):
             tmp = il.set_reg(size, reg2str(oper_val), tmp)
             il.append(tmp)
         else:
+            # this shouldn't ever be hit as all the opcodes have lhs = register
             il.append(il.unimplemented())
 
     elif decoded.op == OP.AND:
@@ -364,8 +365,8 @@ def gen_instr_il(addr, decoded, il):
         if oper_type == OPER_TYPE.ADDR:
             il.append(il.call(il.const_pointer(2, oper_val)))
         else:
-            # TODO: handle the conditional
-            il.append(il.unimplemented())
+            tmp = il.call(il.const_pointer(2, operb_val))
+            append_conditional_instr(oper_val, tmp, il)
 
     elif decoded.op == OP.CCF:
         il.append(il.set_flag('c', il.not_expr(0, il.flag('c'))))
@@ -376,6 +377,12 @@ def gen_instr_il(addr, decoded, il):
         rhs = operand_to_il(oper_type, oper_val, il, 1)
         sub = il.sub(1, lhs, rhs, flags='*')
         il.append(sub)
+
+    elif decoded.op == OP.CPL:
+        tmp = il.reg(1, 'A')
+        tmp = il.xor_expr(1, il.const(1, 0xFF), tmp, flags='*')
+        tmp = il.set_reg(1, 'A', tmp)
+        il.append(tmp)
 
     elif decoded.op == OP.DJNZ:
         # decrement B
@@ -491,6 +498,12 @@ def gen_instr_il(addr, decoded, il):
             if do_mark:
                 il.mark_label(f)
 
+    elif decoded.op == OP.NEG:
+        tmp = il.reg(1, 'A')
+        tmp = il.sub(1, il.const(1, 0), tmp, flags='*')
+        tmp = il.set_reg(1, 'A', tmp)
+        il.append(tmp)
+
     elif decoded.op == OP.NOP:
         il.append(il.nop())
 
@@ -604,6 +617,38 @@ def gen_instr_il(addr, decoded, il):
         else:
             tmp2 = operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
             il.append(il.store(1, tmp2, rot))
+
+    elif decoded.op == OP.RST:
+        # this is like call but we zero extend
+        il.append(il.call(il.const_pointer(2, oper_val)))
+
+    elif decoded.op == OP.RES:
+        assert oper_type == OPER_TYPE.IMM
+        assert oper_val >= 0 and oper_val <= 7
+        mask = il.const(1, (1<<oper_val) ^ 0xFF)
+        operand = operand_to_il(operb_type, operb_val, il, 1)
+        result = il.and_expr(1, operand, mask)
+
+        if operb_type == OPER_TYPE.REG:
+            tmp = il.set_reg(1, reg2str(operb_val), result)
+        else:
+            tmp = il.store(1, operand_to_il(operb_type, operb_val, il, 1, peel_load=True), result)
+
+        il.append(tmp)
+
+    elif decoded.op == OP.SET:
+        assert oper_type == OPER_TYPE.IMM
+        assert oper_val >= 0 and oper_val <= 7
+        mask = il.const(1, 1<<oper_val)
+        operand = operand_to_il(operb_type, operb_val, il, 1)
+        result = il.or_expr(1, operand, mask)
+
+        if operb_type == OPER_TYPE.REG:
+            tmp = il.set_reg(1, reg2str(operb_val), result)
+        else:
+            tmp = il.store(1, operand_to_il(operb_type, operb_val, il, 1, peel_load=True), result)
+
+        il.append(tmp)
 
     elif decoded.op == OP.SRA:
         tmp = operand_to_il(oper_type, oper_val, il, 1)
