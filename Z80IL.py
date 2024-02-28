@@ -602,7 +602,7 @@ def gen_instr_il(addr, decoded, il):
 
     elif decoded.op in [OP.RR, OP.RRA]:
         # rotate THROUGH carry: b7=c, c=b0
-        # z80 'RL' -> llil 'RRC'
+        # z80 'RR' -> llil 'RRC'
         if decoded.op == OP.RRA:
             src = il.reg(1, 'A')
         else:
@@ -611,6 +611,24 @@ def gen_instr_il(addr, decoded, il):
         rot = il.rotate_right_carry(1, src, il.const(1, 1), il.flag('c'), flags='c')
 
         if decoded.op == OP.RRA:
+            il.append(il.set_reg(1, 'A', rot))
+        elif oper_type == OPER_TYPE.REG:
+            il.append(il.set_reg(1, reg2str(oper_val), rot))
+        else:
+            tmp2 = operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
+            il.append(il.store(1, tmp2, rot))
+
+    elif decoded.op in [OP.RRC, OP.RRCA]:
+        # rotate and COPY to carry: b0=c, c=b8
+        # z80 'RR' -> llil 'ROR'
+        if decoded.op == OP.RRCA:
+            src = il.reg(1, 'A')
+        else:
+            src = operand_to_il(oper_type, oper_val, il, 1)
+
+        rot = il.rotate_right(1, src, il.const(1, 1), flags='c')
+
+        if decoded.op == OP.RRCA:
             il.append(il.set_reg(1, 'A', rot))
         elif oper_type == OPER_TYPE.REG:
             il.append(il.set_reg(1, reg2str(oper_val), rot))
