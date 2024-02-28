@@ -186,6 +186,26 @@ def operand_to_il(oper_type, oper_val, il, size_hint=0, peel_load=False):
     else:
         raise Exception("unknown operand type: " + str(oper_type))
 
+def exchange(lhs_reg, rhs_reg, il):
+    # temp0 = lhs
+    il.append(il.expr(LowLevelILOperation.LLIL_SET_REG,
+        LLIL_TEMP(0),
+        il.reg(2, lhs_reg),
+        size = 2
+    ))
+
+    # lhs = rhs
+    il.append(il.set_reg(2,
+        lhs_reg,
+        il.reg(2, rhs_reg)
+    ))
+
+    # rhs = temp0
+    il.append(il.set_reg(2,
+        rhs_reg,
+        il.expr(LowLevelILOperation.LLIL_REG, LLIL_TEMP(0), 2)
+    ))
+
 def expressionify(size, foo, il, temps_are_conds=False):
     """ turns the "reg or constant"  operands to get_flag_write_low_level_il()
         into lifted expressions """
@@ -429,6 +449,11 @@ def gen_instr_il(addr, decoded, il):
             reg2str(operb_val),
             il.expr(LowLevelILOperation.LLIL_REG, LLIL_TEMP(0), 2)
         ))
+
+    elif decoded.op == OP.EXX:
+        exchange('BC', "BC'", il)
+        exchange('DE', "DE'", il)
+        exchange('HL', "HL'", il)
 
     elif decoded.op == OP.INC:
         # inc reg can be 1-byte or 2-byte
