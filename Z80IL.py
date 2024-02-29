@@ -250,8 +250,8 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             return il.const(1, 0)
         if op == LowLevelILOperation.LLIL_ASR:
             return il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1))
-        if op == LowLevelILOperation.LLIL_POP:
-            return il.set_flag('c', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1)))
+        if op == LowLevelILOperation.LLIL_LOAD and operands[0].name == 'AF':
+            return il.set_flag('c', il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1)))
         if op == LowLevelILOperation.LLIL_RLC:
             return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 0x80))
         if op == LowLevelILOperation.LLIL_ROL:
@@ -264,8 +264,8 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             return il.const(1, 0)
 
     if flag == 'h':
-        if op == LowLevelILOperation.LLIL_POP:
-            return il.set_flag('h', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<4)))
+        if op == LowLevelILOperation.LLIL_LOAD and operands[0].name == 'AF':
+            return il.set_flag('h', il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1<<4)))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
         if op == LowLevelILOperation.LLIL_ADD:
@@ -298,8 +298,8 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             return il.compare_not_equal(size, bottom_nybble, il.const(size, 0x00))
 
     if flag == 'n':
-        if op == LowLevelILOperation.LLIL_POP:
-            return il.set_flag('n', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<1)))
+        if op == LowLevelILOperation.LLIL_LOAD and operands[0].name == 'AF':
+            return il.set_flag('n', il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1<<1)))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
         if op in [LowLevelILOperation.LLIL_ADD, LowLevelILOperation.LLIL_ADC]:
@@ -338,16 +338,16 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                 )
             )
 
-        if op == LowLevelILOperation.LLIL_POP:
-            return il.set_flag('pv', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<2)))
+        if op == LowLevelILOperation.LLIL_LOAD and operands[0].name == 'AF':
+            return il.set_flag('pv', il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1<<2)))
 
         if op == LowLevelILOperation.LLIL_XOR:
             # TODO: implement real parity
             return il.const(1, 0)
 
     if flag == 's':
-        if op == LowLevelILOperation.LLIL_POP:
-            return il.set_flag('s', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<7)))
+        if op == LowLevelILOperation.LLIL_LOAD and operands[0].name == 'AF':
+            return il.set_flag('s', il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1<<7)))
 
         if op == LowLevelILOperation.LLIL_SBB:
             return il.compare_signed_less_than(size,
@@ -362,8 +362,8 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             )
 
     if flag == 'z':
-        if op == LowLevelILOperation.LLIL_POP:
-            return il.set_flag('z', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<6)))
+        if op == LowLevelILOperation.LLIL_LOAD and operands[0].name == 'AF':
+            return il.set_flag('z', il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1<<6)))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.compare_equal(size,
                 il.xor_expr(size,
