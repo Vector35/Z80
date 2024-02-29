@@ -362,6 +362,8 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             )
 
     if flag == 'z':
+        if op == LowLevelILOperation.LLIL_POP:
+            return il.set_flag('z', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<6)))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.compare_equal(size,
                 il.xor_expr(size,
