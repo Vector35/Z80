@@ -4,7 +4,8 @@ import re
 
 from binaryninja.log import log_info
 from binaryninja.architecture import Architecture
-from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
+from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken, IntrinsicInfo
+from binaryninja.types import Type
 from binaryninja.enums import InstructionTextTokenType, BranchType, FlagRole, LowLevelILFlagCondition
 
 from . import Z80IL
@@ -132,6 +133,11 @@ class Z80(Architecture):
         'pv': FlagRole.OverflowFlagRole, # actually overflow or parity: TODO: implement later
         'n': FlagRole.SpecialFlagRole, # set if last instruction was a subtraction (incl. CP)
         'c': FlagRole.CarryFlagRole
+    }
+
+    intrinsics = {
+        'out': IntrinsicInfo([Type.int(1), Type.int(1)], []),
+        'in': IntrinsicInfo([Type.int(1)], [Type.int(1)]),
     }
 
     # MAP (condition x class) -> flags

@@ -264,6 +264,8 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
     if flag == 'h':
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
+        if op == LowLevelILOperation.LLIL_OR:
+            return il.const(1, 0)
         if op == LowLevelILOperation.LLIL_ADD:
             # we've overflowed bottom nybble if it's lower after an add
             original_bottom_nybble = il.and_expr(size, expressionify(size, operands[0], il), il.const(size, 0x0F))
@@ -295,6 +297,8 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
 
     if flag == 'n':
         if op == LowLevelILOperation.LLIL_XOR:
+            return il.const(1, 0)
+        if op == LowLevelILOperation.LLIL_OR:
             return il.const(1, 0)
         if op in [LowLevelILOperation.LLIL_ADD, LowLevelILOperation.LLIL_ADC]:
             return il.const(1, 0)
@@ -334,8 +338,39 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
 
 
         if op == LowLevelILOperation.LLIL_XOR:
-            # TODO: implement real parity
-            return il.const(1, 0)
+            assert size == 1
+            result = il.xor_expr(size, expressionify(size, operands[0], il), expressionify(size, operands[1], il))
+            # combine top4 and bottom4 bits
+            top4 = il.logical_shift_right(size, result, il.const(1, 4))
+            bot4 = il.and_expr(size, result, il.const(1, 0x0F))
+            parity4 = il.xor_expr(size, top4, bot4)
+            # combine top2 and bottom2 bits
+            top2 = il.logical_shift_right(size, parity4, il.const(1, 2))
+            bot2 = il.and_expr(size, parity4, il.const(1, 0x03))
+            parity2 = il.xor_expr(size, top2, bot2)
+            # combine top1 and bottom1 bits
+            top1 = il.logical_shift_right(size, parity2, il.const(1, 1))
+            bot1 = il.and_expr(size, parity2, il.const(1, 0x01))
+            parity1 = il.xor_expr(size, top1, bot1)
+
+            return il.compare_equal(size, parity1, il.const(size, 0))
+        if op == LowLevelILOperation.LLIL_OR:
+            assert size == 1
+            result = il.or_expr(size, expressionify(size, operands[0], il), expressionify(size, operands[1], il))
+            # combine top4 and bottom4 bits
+            top4 = il.logical_shift_right(size, result, il.const(1, 4))
+            bot4 = il.and_expr(size, result, il.const(1, 0x0F))
+            parity4 = il.xor_expr(size, top4, bot4)
+            # combine top2 and bottom2 bits
+            top2 = il.logical_shift_right(size, parity4, il.const(1, 2))
+            bot2 = il.and_expr(size, parity4, il.const(1, 0x03))
+            parity2 = il.xor_expr(size, top2, bot2)
+            # combine top1 and bottom1 bits
+            top1 = il.logical_shift_right(size, parity2, il.const(1, 1))
+            bot1 = il.and_expr(size, parity2, il.const(1, 0x01))
+            parity1 = il.xor_expr(size, top1, bot1)
+
+            return il.compare_equal(size, parity1, il.const(size, 0))
 
     if flag == 's':
         if op == LowLevelILOperation.LLIL_SBB:
@@ -397,7 +432,9 @@ def gen_instr_il(addr, decoded, il):
         assert oper_val >= 0 and oper_val <= 7
         mask = il.const(1, 1<<oper_val)
         operand = operand_to_il(operb_type, operb_val, il, 1)
-        il.append(il.and_expr(1, operand, mask, flags='*'))
+        il.append(il.and_expr(1, operand, mask, flags='z'))
+        il.append(il.set_flag('h', il.const(1, 1)))
+        il.append(il.set_flag('n', il.const(1, 0)))
 
     elif decoded.op == OP.CALL:
         if oper_type == OPER_TYPE.ADDR:
@@ -588,6 +625,11 @@ def gen_instr_il(addr, decoded, il):
         exchange('DE', "DE'", il)
         exchange('HL', "HL'", il)
 
+    elif decoded.op == OP.IN:
+        temp0 = LLIL_TEMP(0)
+        il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [operand_to_il(operb_type, operb_val, il, 1)]))
+        il.append(il.set_reg(1, reg2str(oper_val), il.reg(1, temp0)))
+
     elif decoded.op == OP.INC:
         # inc reg can be 1-byte or 2-byte
         if oper_type == OPER_TYPE.REG:
@@ -670,6 +712,9 @@ def gen_instr_il(addr, decoded, il):
         tmp = il.or_expr(1, operand_to_il(oper_type, oper_val, il, 1), tmp, flags='*')
         tmp = il.set_reg(1, 'A', tmp)
         il.append(tmp)
+
+    elif decoded.op == OP.OUT:
+        il.append(il.intrinsic([], "out", [operand_to_il(oper_type, oper_val, il, 1), operand_to_il(operb_type, operb_val, il, 1)]))
 
     elif decoded.op == OP.POP:
         # possible operands are: af bc de hl ix iy
