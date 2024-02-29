@@ -268,12 +268,44 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             return il.set_flag('h', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<4)))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
+        if op == LowLevelILOperation.LLIL_ADD:
+            # we've overflowed bottom nybble if it's lower after an add
+            original_bottom_nybble = il.and_expr(size, expressionify(size, operands[0], il), il.const(size, 0x0F))
+            result = il.add(size, expressionify(size, operands[0], il), expressionify(size, operands[1], il))
+            result_bottom_nybble = il.and_expr(size, result, il.const(size, 0x0F))
+            return il.compare_unsigned_less_than(size, result_bottom_nybble, original_bottom_nybble)
+        if op == LowLevelILOperation.LLIL_ADC:
+            # we've overflowed bottom nybble if it's lower after an adc
+            original_bottom_nybble = il.and_expr(size, expressionify(size, operands[0], il), il.const(size, 0x0F))
+            result = il.add_carry(size, expressionify(size, operands[0], il), expressionify(size, operands[1], il), il.flag("c"))
+            result_bottom_nybble = il.and_expr(size, result, il.const(size, 0x0F))
+            return il.compare_unsigned_less_than(size, result_bottom_nybble, original_bottom_nybble)
+        if op == LowLevelILOperation.LLIL_SUB:
+            # we've overflowed bottom nybble if it's higher after a sub
+            original_bottom_nybble = il.and_expr(size, expressionify(size, operands[0], il), il.const(size, 0x0F))
+            result = il.sub(size, expressionify(size, operands[0], il), expressionify(size, operands[1], il))
+            result_bottom_nybble = il.and_expr(size, result, il.const(size, 0x0F))
+            return il.compare_unsigned_greater_than(size, result_bottom_nybble, original_bottom_nybble)
+        if op == LowLevelILOperation.LLIL_SUB:
+            # we've overflowed bottom nybble if it's higher after a sbc
+            original_bottom_nybble = il.and_expr(size, expressionify(size, operands[0], il), il.const(size, 0x0F))
+            result = il.sub_borrow(size, expressionify(size, operands[0], il), expressionify(size, operands[1], il), il.flag("c"))
+            result_bottom_nybble = il.and_expr(size, result, il.const(size, 0x0F))
+            return il.compare_unsigned_greater_than(size, result_bottom_nybble, original_bottom_nybble)
+        if op == LowLevelILOperation.LLIL_NEG:
+            # if bottom nybble != 0 then we've had to borrow and therefore h needs to be set
+            bottom_nybble = il.and_expr(size, expressionify(size, operands[0], il), il.const(size, 0x0F))
+            return il.compare_not_equal(size, bottom_nybble, il.const(size, 0x00))
 
     if flag == 'n':
         if op == LowLevelILOperation.LLIL_POP:
             return il.set_flag('n', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1<<1)))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
+        if op in [LowLevelILOperation.LLIL_ADD, LowLevelILOperation.LLIL_ADC]:
+            return il.const(1, 0)
+        if op in [LowLevelILOperation.LLIL_SUB, LowLevelILOperation.LLIL_SBB, LowLevelILOperation.LLIL_NEG]:
+            return il.const(1, 1)
 
     if flag == 'pv':
         if op == LowLevelILOperation.LLIL_SBB:
