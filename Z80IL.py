@@ -306,6 +306,35 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             return il.const(1, 1)
 
     if flag == 'pv':
+        if op == LowLevelILOperation.LLIL_ADC:
+            a = expressionify(size, operands[0], il)
+            b = expressionify(size, operands[1], il)
+            c = il.flag('c')
+
+            zero = il.const(1, 0)
+            result = il.add(size, il.add(size, a, b), c)
+            augend = il.add(size, b, c)
+
+            return il.or_expr(0,
+                il.and_expr(0,
+                    # a>0 && (b+c)>0
+                    il.and_expr(0,
+                        il.compare_signed_greater_than(size, a, zero),
+                        il.compare_signed_greater_than(size, augend, zero)
+                    ),
+                    # (a-(b+c))<0
+                    il.compare_signed_less_than(size, result, zero)
+                ),
+                il.and_expr(0,
+                    # a<0 && (b+c)<0
+                    il.and_expr(0,
+                        il.compare_signed_less_than(size, a, zero),
+                        il.compare_signed_less_than(size, augend, zero)
+                    ),
+                    # (a-(b+c))>0
+                    il.compare_signed_greater_than(size, result, zero)
+                )
+            )
         if op == LowLevelILOperation.LLIL_SBB:
             a = expressionify(size, operands[0], il)
             b = expressionify(size, operands[1], il)
@@ -326,7 +355,7 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
                     il.compare_signed_less_than(size, result, zero)
                 ),
                 il.and_expr(0,
-                    # a<0 && (b+c>0
+                    # a<0 && (b+c)>0
                     il.and_expr(0,
                         il.compare_signed_less_than(size, a, zero),
                         il.compare_signed_greater_than(size, subtrahend, zero)
@@ -516,6 +545,9 @@ def gen_instr_il(addr, decoded, il):
 
         # TODO s and pv flags
 
+    elif decoded.op == OP.DI:
+        il.append(il.intrinsic([], "di", []))
+
     elif decoded.op == OP.DJNZ:
         # decrement B
         tmp = il.reg(1, 'B')
@@ -533,6 +565,9 @@ def gen_instr_il(addr, decoded, il):
             return
         tmp = il.compare_not_equal(1, il.reg(1, 'B'), il.const(1, 0))
         il.append(il.if_expr(tmp, t, f))
+
+    elif decoded.op == OP.EI:
+        il.append(il.intrinsic([], "ei", []))
 
     elif decoded.op == OP.EX:
         if oper_val == REG.AF:
@@ -625,6 +660,12 @@ def gen_instr_il(addr, decoded, il):
         exchange('DE', "DE'", il)
         exchange('HL', "HL'", il)
 
+    elif decoded.op == OP.HALT:
+        il.append(il.intrinsic([], "halt", []))
+
+    elif decoded.op == OP.IM:
+        il.append(il.intrinsic([], "im", [operand_to_il(oper_type, oper_val, il, 1)]))
+
     elif decoded.op == OP.IN:
         temp0 = LLIL_TEMP(0)
         il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [operand_to_il(operb_type, operb_val, il, 1)]))
@@ -715,6 +756,72 @@ def gen_instr_il(addr, decoded, il):
 
     elif decoded.op == OP.OUT:
         il.append(il.intrinsic([], "out", [operand_to_il(oper_type, oper_val, il, 1), operand_to_il(operb_type, operb_val, il, 1)]))
+
+    elif decoded.op == OP.OUTD:
+        # read from (HL)
+        tmp = il.load(1, il.reg(2, 'HL'))
+        # out (C) val
+        il.append(il.intrinsic([], "out", [il.reg(1, 'C'), tmp]))
+        # HL = HL - 1
+        il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # B = B - 1
+        # set Z if B == 0
+        il.append(il.set_reg(1, 'B', il.sub(1, il.reg(1, 'B'), il.const(1, 1), 'z')))
+
+    elif decoded.op == OP.OTDR:
+        # just does OUTD until B is 0
+        # z80 manual says if B is 0 then it will do 256 loops
+        # so we can happily just check at the end
+        repeat_label = LowLevelILLabel()
+        end_label = LowLevelILLabel()
+        # mark start of loop
+        il.mark_label(repeat_label)
+        # read from (HL)
+        tmp = il.load(1, il.reg(2, 'HL'))
+        # out (C) val
+        il.append(il.intrinsic([], "out", [il.reg(1, 'C'), tmp]))
+        # HL = HL - 1
+        il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # B = B - 1
+        # set Z if B == 0
+        il.append(il.set_reg(1, 'B', il.sub(1, il.reg(1, 'B'), il.const(1, 1), 'z')))
+        # loop if NZ
+        il.append(il.if_expr(il.flag('z'), end_label, repeat_label))
+        # mark end
+        il.mark_label(end_label)
+
+    elif decoded.op == OP.OUTI:
+        # read from (HL)
+        tmp = il.load(1, il.reg(2, 'HL'))
+        # out (C) val
+        il.append(il.intrinsic([], "out", [il.reg(1, 'C'), tmp]))
+        # HL = HL + 1
+        il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # B = B - 1
+        # set Z if B == 0
+        il.append(il.set_reg(1, 'B', il.sub(1, il.reg(1, 'B'), il.const(1, 1), 'z')))
+
+    elif decoded.op == OP.OTIR:
+        # just does OUTI until B is 0
+        # z80 manual says if B is 0 then it will do 256 loops
+        # so we can happily just check at the end
+        repeat_label = LowLevelILLabel()
+        end_label = LowLevelILLabel()
+        # mark start of loop
+        il.mark_label(repeat_label)
+        # read from (HL)
+        tmp = il.load(1, il.reg(2, 'HL'))
+        # out (C) val
+        il.append(il.intrinsic([], "out", [il.reg(1, 'C'), tmp]))
+        # HL = HL + 1
+        il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # B = B - 1
+        # set Z if B == 0
+        il.append(il.set_reg(1, 'B', il.sub(1, il.reg(1, 'B'), il.const(1, 1), 'z')))
+        # loop if NZ
+        il.append(il.if_expr(il.flag('z'), end_label, repeat_label))
+        # mark end
+        il.mark_label(end_label)
 
     elif decoded.op == OP.POP:
         # possible operands are: af bc de hl ix iy
@@ -868,6 +975,9 @@ def gen_instr_il(addr, decoded, il):
 
         il.append(tmp)
 
+    elif decoded.op == OP.SCF:
+        il.append(il.set_flag('c', il.const(1, 1)))
+
     elif decoded.op == OP.SET:
         assert oper_type == OPER_TYPE.IMM
         assert oper_val >= 0 and oper_val <= 7
@@ -882,9 +992,37 @@ def gen_instr_il(addr, decoded, il):
 
         il.append(tmp)
 
+    elif decoded.op == OP.SLA:
+        tmp = operand_to_il(oper_type, oper_val, il, 1)
+        tmp = il.shift_left(1, tmp, il.const(1, 1), flags='cszpv')
+
+        if oper_type == OPER_TYPE.REG:
+            tmp = il.set_reg(1, reg2str(oper_val), tmp)
+        else:
+            tmp = il.store(1,
+                operand_to_il(oper_type, oper_val, il, 1, peel_load=True),
+                tmp
+            )
+
+        il.append(tmp)
+
     elif decoded.op == OP.SRA:
         tmp = operand_to_il(oper_type, oper_val, il, 1)
-        tmp = il.arith_shift_right(1, tmp, il.const(1, 1), flags='c')
+        tmp = il.arith_shift_right(1, tmp, il.const(1, 1), flags='cszpv')
+
+        if oper_type == OPER_TYPE.REG:
+            tmp = il.set_reg(1, reg2str(oper_val), tmp)
+        else:
+            tmp = il.store(1,
+                operand_to_il(oper_type, oper_val, il, 1, peel_load=True),
+                tmp
+            )
+
+        il.append(tmp)
+
+    elif decoded.op == OP.SRL:
+        tmp = operand_to_il(oper_type, oper_val, il, 1)
+        tmp = il.logical_shift_right(1, tmp, il.const(1, 1), flags='cszpv')
 
         if oper_type == OPER_TYPE.REG:
             tmp = il.set_reg(1, reg2str(oper_val), tmp)

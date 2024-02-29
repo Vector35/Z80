@@ -138,6 +138,10 @@ class Z80(Architecture):
     intrinsics = {
         'out': IntrinsicInfo([Type.int(1), Type.int(1)], []),
         'in': IntrinsicInfo([Type.int(1)], [Type.int(1)]),
+        'ei': IntrinsicInfo([], []),
+        'di': IntrinsicInfo([], []),
+        'halt': IntrinsicInfo([], []),
+        'im': IntrinsicInfo([Type.int(1)], []),
     }
 
     # MAP (condition x class) -> flags
