@@ -551,20 +551,17 @@ def gen_instr_il(addr, decoded, il):
     elif decoded.op == OP.DJNZ:
         # decrement B
         tmp = il.reg(1, 'B')
-        tmp = il.add(1, tmp, il.const(1,-1))
+        tmp = il.sub(1, tmp, il.const(1, 1), 'z')
         tmp = il.set_reg(1, 'B', tmp)
         il.append(tmp)
         # if nonzero, jump! (the "go" is built into il.if_expr)
-        t = il.get_label_for_address(Architecture['Z80'], oper_val)
-        if not t:
-            il.append(il.unimplemented())
-            return
-        f = il.get_label_for_address(Architecture['Z80'], addr + decoded.len)
-        if not f:
-            il.append(il.unimplemented())
-            return
-        tmp = il.compare_not_equal(1, il.reg(1, 'B'), il.const(1, 0))
-        il.append(il.if_expr(tmp, t, f))
+        label_loop = LowLevelILLabel()
+        label_continue = LowLevelILLabel()
+
+        il.append(il.if_expr(il.flag('z'), label_continue, label_loop))
+        il.mark_label(label_loop)
+        il.append(il.jump(operand_to_il(oper_type, oper_val, il, 2)))
+        il.mark_label(label_continue)
 
     elif decoded.op == OP.EI:
         il.append(il.intrinsic([], "ei", []))
@@ -983,6 +980,61 @@ def gen_instr_il(addr, decoded, il):
         else:
             tmp2 = operand_to_il(oper_type, oper_val, il, 1, peel_load=True)
             il.append(il.store(1, tmp2, rot))
+    
+    elif decoded.op == OP.RLD:
+        # picture A as ab and the byte in (HL) as cd
+        # we take a 12-bit number of bcd
+        # then we rotate this left 4 bits
+        # so we end up with cdb
+        # A = ac and (HL) = db
+        # let's break this down
+        # we'll use temp0 as future (HL) = db
+        # set temp0 = (a & 0x0F) | ((HL) << 4)
+        # then set A = (a & 0xF0) | ((HL) >> 4)
+        # then store (HL) = temp0
+
+        # temp0 = (a & 0x0F) | ((HL) << 4)
+        lhs = il.and_expr(1, il.reg(1, 'A'), il.const(1, 0x0F))
+        rhs = il.shift_left(1, il.load(1, il.reg(2, 'HL')), il.const(1, 4))
+        il.append(il.expr(LowLevelILOperation.LLIL_SET_REG,
+            LLIL_TEMP(0),
+            il.or_expr(1, lhs, rhs),
+            size = 1
+        ))
+
+        # A = (a & 0xF0) | ((HL) >> 4)
+        lhs = il.and_expr(1, il.reg(1, 'A'), il.const(1, 0xF0))
+        rhs = il.logical_shift_right(1, il.load(1, il.reg(2, 'HL')), il.const(1, 4))
+        il.append(il.set_reg(1, 'A', il.or_expr(1, lhs, rhs)))
+
+        # store (HL) = temp0
+        il.append(il.store(1, il.reg(2, 'HL'), il.expr(LowLevelILOperation.LLIL_REG, LLIL_TEMP(0), 1)))
+    
+    elif decoded.op == OP.RRD:
+        # RLD in reverse
+        # A = ab, (HL) = cd
+        # at the end we have
+        # A = ad, (HL) = bc
+        # set temp0 = (a << 4) | ((HL) >> 4)
+        # then set A = (a & 0xF0) | ((HL) & 0x0F)
+        # then store (HL) = temp0
+
+        # temp0 = (a << 4) | ((HL) >> 4)
+        lhs = il.shift_left(1, il.reg(1, 'A'), il.const(1, 4))
+        rhs = il.logical_shift_right(1, il.load(1, il.reg(2, 'HL')), il.const(1, 4))
+        il.append(il.expr(LowLevelILOperation.LLIL_SET_REG,
+            LLIL_TEMP(0),
+            il.or_expr(1, lhs, rhs),
+            size = 1
+        ))
+
+        # set A = (a & 0xF0) | ((HL) & 0x0F)
+        lhs = il.and_expr(1, il.reg(1, 'A'), il.const(1, 0xF0))
+        rhs = il.and_expr(1, il.load(1, il.reg(2, 'HL')), il.const(1, 0x0F))
+        il.append(il.set_reg(1, 'A', il.or_expr(1, lhs, rhs)))
+
+        # store (HL) = temp0
+        il.append(il.store(1, il.reg(2, 'HL'), il.expr(LowLevelILOperation.LLIL_REG, LLIL_TEMP(0), 1)))
 
     elif decoded.op == OP.RET:
         tmp = il.ret(il.pop(2))
