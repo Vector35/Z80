@@ -401,6 +401,63 @@ def gen_instr_il(addr, decoded, il):
         tmp = il.set_reg(1, 'A', tmp)
         il.append(tmp)
 
+    elif decoded.op == OP.DAA:
+        # correct BCD after arithmetic
+        # based on page 17-18 http://www.z80.info/zip/z80-documented.pdf
+        # and pseudocode from https://stackoverflow.com/questions/8119577/z80-daa-instruction/57837042#57837042
+
+        # first step, find diff
+        # initialise to 0
+        diff = LLIL_TEMP(0)
+        il.append(il.set_reg(1, diff, il.const(1, 0)))
+
+        # lower carry
+        # if lower nybble > 9 OR H flag set then we diff by 0x06
+        label_add_6 = LowLevelILLabel()
+        label_dont_add_6 = LowLevelILLabel()
+        lower_nybble = il.xor_expr(1, il.const(1, 0x0F), il.reg(1, 'A'))
+        cond_gt_9 = il.compare_unsigned_greater_than(1, lower_nybble, il.const(1, 0x09))
+        cond_hf_set = il.flag('h')
+        cond = il.or_expr(1, cond_gt_9, cond_hf_set)
+
+        il.append(il.if_expr(cond, label_add_6, label_dont_add_6))
+        il.mark_label(label_add_6)
+        il.append(il.set_reg(1, diff, il.add(1, il.reg(1, diff), il.const(1, 0x06))))
+        il.mark_label(label_dont_add_6)
+
+        # upper carry
+        # if byte > 0x99 or C flag set then we diff by 0x60
+        label_add_60 = LowLevelILLabel()
+        label_dont_add_60 = LowLevelILLabel()
+        cond_gt_99 = il.compare_unsigned_greater_than(1, il.reg(1, 'A'), il.const(1, 0x99))
+        cond_cf_set = il.flag('c')
+        cond = il.or_expr(1, cond_gt_99, cond_cf_set)
+
+        il.append(il.if_expr(cond, label_add_60, label_dont_add_60))
+        il.mark_label(label_add_60)
+        il.append(il.set_reg(1, diff, il.add(1, il.reg(1, diff), il.const(1, 0x60))))
+        # set C flag here now as this is also the condition
+        # we never reset it but we do set it if we make a high nybble adjustment
+        il.append(il.set_flag('c', il.const(1, 1)))
+        il.mark_label(label_dont_add_60)
+
+        # set h flag
+        # ideally the flag should evaluate to an expression that looks good in an if statement in HLIL
+        # i suspect these flags never get queried
+        # TODO implement h flag
+
+        # apply adjustment
+        label_neg_diff = LowLevelILLabel()
+        label_add_diff = LowLevelILLabel()
+
+        il.append(il.if_expr(il.flag('n'), label_neg_diff, label_add_diff))
+        il.mark_label(label_neg_diff)
+        il.append(il.set_reg(1, diff, il.neg_expr(1, il.reg(1, diff))))
+        il.mark_label(label_add_diff)
+        il.append(il.set_reg(1, 'A', il.add(1, il.reg(1, 'A'), il.reg(1, diff), 'z')))
+
+        # TODO s and pv flags
+
     elif decoded.op == OP.DJNZ:
         # decrement B
         tmp = il.reg(1, 'B')
