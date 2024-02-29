@@ -671,6 +671,76 @@ def gen_instr_il(addr, decoded, il):
         il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [operand_to_il(operb_type, operb_val, il, 1)]))
         il.append(il.set_reg(1, reg2str(oper_val), il.reg(1, temp0)))
 
+    elif decoded.op == OP.INI:
+        # in temp0 (C)
+        temp0 = LLIL_TEMP(0)
+        il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [il.reg(1, 'C')]))
+        # save to (HL)
+        il.append(il.store(1, il.reg(2, 'HL'), temp0))
+        # HL = HL + 1
+        il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # B = B - 1
+        # set Z if B == 0
+        il.append(il.set_reg(1, 'B', il.sub(1, il.reg(1, 'B'), il.const(1, 1), 'z')))
+
+    elif decoded.op == OP.INIR:
+        # just does INI until B is 0
+        # z80 manual says if B is 0 then it will do 256 loops
+        # so we can happily just check at the end
+        repeat_label = LowLevelILLabel()
+        end_label = LowLevelILLabel()
+        # mark start of loop
+        il.mark_label(repeat_label)
+        # in temp0 (C)
+        temp0 = LLIL_TEMP(0)
+        il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [il.reg(1, 'C')]))
+        # save to (HL)
+        il.append(il.store(1, il.reg(2, 'HL'), temp0))
+        # HL = HL + 1
+        il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # B = B - 1
+        # set Z if B == 0
+        il.append(il.set_reg(1, 'B', il.sub(1, il.reg(1, 'B'), il.const(1, 1), 'z')))
+        # loop if NZ
+        il.append(il.if_expr(il.flag('z'), end_label, repeat_label))
+        # mark end
+        il.mark_label(end_label)
+
+    elif decoded.op == OP.IND:
+        # in temp0 (C)
+        temp0 = LLIL_TEMP(0)
+        il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [il.reg(1, 'C')]))
+        # save to (HL)
+        il.append(il.store(1, il.reg(2, 'HL'), temp0))
+        # HL = HL - 1
+        il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # B = B - 1
+        # set Z if B == 0
+        il.append(il.set_reg(1, 'B', il.sub(1, il.reg(1, 'B'), il.const(1, 1), 'z')))
+
+    elif decoded.op == OP.INDR:
+        # just does IND until B is 0
+        # z80 manual says if B is 0 then it will do 256 loops
+        # so we can happily just check at the end
+        repeat_label = LowLevelILLabel()
+        end_label = LowLevelILLabel()
+        # mark start of loop
+        il.mark_label(repeat_label)
+        # in temp0 (C)
+        temp0 = LLIL_TEMP(0)
+        il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [il.reg(1, 'C')]))
+        # save to (HL)
+        il.append(il.store(1, il.reg(2, 'HL'), temp0))
+        # HL = HL - 1
+        il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # B = B - 1
+        # set Z if B == 0
+        il.append(il.set_reg(1, 'B', il.sub(1, il.reg(1, 'B'), il.const(1, 1), 'z')))
+        # loop if NZ
+        il.append(il.if_expr(il.flag('z'), end_label, repeat_label))
+        # mark end
+        il.mark_label(end_label)
+
     elif decoded.op == OP.INC:
         # inc reg can be 1-byte or 2-byte
         if oper_type == OPER_TYPE.REG:
