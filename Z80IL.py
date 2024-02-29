@@ -806,6 +806,28 @@ def gen_instr_il(addr, decoded, il):
             if do_mark:
                 il.mark_label(f)
 
+    elif decoded.op in [OP.LDD, OP.LDDR]:
+        if decoded.op == OP.LDDR:
+            t = LowLevelILLabel()
+            f = il.get_label_for_address(Architecture['Z80'], addr + decoded.len)
+            il.mark_label(t)
+
+        il.append(il.store(1, il.reg(2, 'DE'), il.load(1, il.reg(2, 'HL'))))
+        il.append(il.set_reg(2, 'DE', il.sub(2, il.reg(2, 'DE'), il.const(2,1))))
+        il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2,1))))
+        il.append(il.set_reg(2, 'BC', il.sub(2, il.reg(2, 'BC'), il.const(2,1))))
+
+        if decoded.op == OP.LDDR:
+            do_mark = False
+            if not f:
+                do_mark = True
+                f = LowLevelILLabel()
+
+            il.append(il.if_expr(il.compare_not_equal(2, il.reg(2, 'BC'), il.const(2, 0)), t, f))
+
+            if do_mark:
+                il.mark_label(f)
+
     elif decoded.op == OP.NEG:
         tmp = il.reg(1, 'A')
         tmp = il.sub(1, il.const(1, 0), tmp, flags='*')
