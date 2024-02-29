@@ -482,6 +482,68 @@ def gen_instr_il(addr, decoded, il):
         sub = il.sub(1, lhs, rhs, flags='*')
         il.append(sub)
 
+    elif decoded.op == OP.CPI:
+        # sub, but do not write to register
+        lhs = il.reg(1, 'A')
+        rhs = il.load(1, il.reg(2, 'HL'))
+        sub = il.sub(1, lhs, rhs, flags='z')
+        il.append(sub)
+        # HL = HL + 1
+        il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # BC = BC - 1
+        tmp = il.sub(2, il.reg(2, 'BC'), il.const(2, 1))
+        il.append(il.set_reg(2, 'BC', tmp))
+        il.append(il.set_flag('pv', il.compare_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
+
+    elif decoded.op == OP.CPIR:
+        label_loop = LowLevelILLabel()
+        label_done = LowLevelILLabel()
+        il.mark_label(label_loop)
+        # sub, but do not write to register
+        lhs = il.reg(1, 'A')
+        rhs = il.load(1, il.reg(2, 'HL'))
+        sub = il.sub(1, lhs, rhs, flags='z')
+        il.append(sub)
+        # HL = HL + 1
+        il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # BC = BC - 1
+        tmp = il.sub(2, il.reg(2, 'BC'), il.const(2, 1))
+        il.append(il.set_reg(2, 'BC', tmp))
+        il.append(il.set_flag('pv', il.compare_not_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
+        il.append(il.if_expr(il.or_expr(1, il.flag('z'), il.neg_expr(1, il.flag('pv'))), label_done, label_loop))
+        il.mark_label(label_done)
+
+    elif decoded.op == OP.CPD:
+        # sub, but do not write to register
+        lhs = il.reg(1, 'A')
+        rhs = il.load(1, il.reg(2, 'HL'))
+        sub = il.sub(1, lhs, rhs, flags='z')
+        il.append(sub)
+        # HL = HL - 1
+        il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # BC = BC - 1
+        tmp = il.sub(2, il.reg(2, 'BC'), il.const(2, 1))
+        il.append(il.set_reg(2, 'BC', tmp))
+        il.append(il.set_flag('pv', il.compare_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
+
+    elif decoded.op == OP.CPDR:
+        label_loop = LowLevelILLabel()
+        label_done = LowLevelILLabel()
+        il.mark_label(label_loop)
+        # sub, but do not write to register
+        lhs = il.reg(1, 'A')
+        rhs = il.load(1, il.reg(2, 'HL'))
+        sub = il.sub(1, lhs, rhs, flags='z')
+        il.append(sub)
+        # HL = HL - 1
+        il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2, 1))))
+        # BC = BC - 1
+        tmp = il.sub(2, il.reg(2, 'BC'), il.const(2, 1))
+        il.append(il.set_reg(2, 'BC', tmp))
+        il.append(il.set_flag('pv', il.compare_not_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
+        il.append(il.if_expr(il.or_expr(1, il.flag('z'), il.neg_expr(1, il.flag('pv'))), label_done, label_loop))
+        il.mark_label(label_done)
+
     elif decoded.op == OP.CPL:
         tmp = il.reg(1, 'A')
         tmp = il.xor_expr(1, il.const(1, 0xFF), tmp, flags='*')
@@ -1058,7 +1120,8 @@ def gen_instr_il(addr, decoded, il):
         # store (HL) = temp0
         il.append(il.store(1, il.reg(2, 'HL'), il.expr(LowLevelILOperation.LLIL_REG, LLIL_TEMP(0), 1)))
 
-    elif decoded.op == OP.RET:
+    elif decoded.op in [OP.RET, OP.RETI, OP.RETN]:
+        # treat RETI and RETN the same for lifting
         tmp = il.ret(il.pop(2))
         if decoded.operands:
             append_conditional_instr(decoded.operands[0][1], tmp, il)
