@@ -286,7 +286,7 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             result = il.sub(size, expressionify(size, operands[0], il), expressionify(size, operands[1], il))
             result_bottom_nybble = il.and_expr(size, result, il.const(size, 0x0F))
             return il.compare_unsigned_greater_than(size, result_bottom_nybble, original_bottom_nybble)
-        if op == LowLevelILOperation.LLIL_SUB:
+        if op == LowLevelILOperation.LLIL_SBB:
             # we've overflowed bottom nybble if it's higher after a sbc
             original_bottom_nybble = il.and_expr(size, expressionify(size, operands[0], il), il.const(size, 0x0F))
             result = il.sub_borrow(size, expressionify(size, operands[0], il), expressionify(size, operands[1], il), il.flag("c"))
