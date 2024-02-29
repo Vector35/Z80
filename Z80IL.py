@@ -209,9 +209,6 @@ def exchange(lhs_reg, rhs_reg, il):
 def expressionify(size, foo, il, temps_are_conds=False):
     """ turns the "reg or constant"  operands to get_flag_write_low_level_il()
         into lifted expressions """
-    if isinstance(foo, int):
-        return foo
-
     if isinstance(foo, ILRegister):
         # LowLevelILExpr is different than ILRegister
         if temps_are_conds and LLIL_TEMP(foo.index):
