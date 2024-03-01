@@ -977,16 +977,21 @@ def gen_instr_il(addr, decoded, il):
     elif decoded.op == OP.POP:
         # possible operands are: af bc de hl ix iy
         if oper_val == REG.AF:
-            flags = il.pop(1)
+            il.append(il.expr(LowLevelILOperation.LLIL_SET_REG,
+                LLIL_TEMP(0),
+                il.pop(1),
+                size = 1
+            ))
+            temp0 = il.expr(LowLevelILOperation.LLIL_REG, LLIL_TEMP(0), 1)
+            il.append(il.set_flag('s', il.test_bit(1, temp0, il.const(1, 1<<7))))
+            il.append(il.set_flag('z', il.test_bit(1, temp0, il.const(1, 1<<6))))
+            il.append(il.set_flag('h', il.test_bit(1, temp0, il.const(1, 1<<4))))
+            il.append(il.set_flag('pv', il.test_bit(1, temp0, il.const(1, 1<<2))))
+            il.append(il.set_flag('n', il.test_bit(1, temp0, il.const(1, 1<<1))))
+            il.append(il.set_flag('c', il.test_bit(1, temp0, il.const(1, 1))))
             tmp = il.pop(1)
             tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
-            il.append(il.set_flag('c', il.test_bit(1, flags, il.const(1, 1))))
-            il.append(il.set_flag('h', il.test_bit(1, flags, il.const(1, 1<<4))))
-            il.append(il.set_flag('n', il.test_bit(1, flags, il.const(1, 1<<1))))
-            il.append(il.set_flag('pv', il.test_bit(1, flags, il.const(1, 1<<2))))
-            il.append(il.set_flag('s', il.test_bit(1, flags, il.const(1, 1<<7))))
-            il.append(il.set_flag('z', il.test_bit(1, flags, il.const(1, 1<<6))))
         else:
             # normal load
             size = REG_TO_SIZE[oper_val]
@@ -1000,30 +1005,26 @@ def gen_instr_il(addr, decoded, il):
         # when pushing AF, actually push the flags
         if oper_val == REG.AF:
             # lo byte F first
-            il.append(il.push(2,
-                il.or_expr(2,
-                    il.or_expr(1,
+            # push flags separately from A as there's 0 value
+            # in treating AF as a whole register
+            il.append(il.push(1, il.reg(1, 'A')))
+            flags = il.or_expr(1,
                         il.or_expr(1,
-                            il.shift_left(1, il.flag('s'), il.const(1, 7)),
-                            il.shift_left(1, il.flag('z'), il.const(1, 6))
+                            il.flag_bit(2, 's', 7),
+                            il.flag_bit(2, 'z', 6),
                         ),
                         il.or_expr(1,
                             il.or_expr(1,
-                                il.shift_left(1, il.flag('h'), il.const(1, 4)),
-                                il.shift_left(1, il.flag('pv'), il.const(1, 2))
+                                il.flag_bit(2, 'h', 4),
+                                il.flag_bit(2, 'pv', 2),
                             ),
                             il.or_expr(1,
-                                il.shift_left(1, il.flag('n'), il.const(1, 1)),
+                                il.flag_bit(2, 'n', 1),
                                 il.flag('c')
                             )
                         )
-                    ),
-                    il.shift_left(2,
-                        il.reg(1, 'A'),
-                        il.const(1, 8)
                     )
-                )
-            ))
+            il.append(il.push(1, flags))
         else:
             il.append(il.push( \
                 REG_TO_SIZE[oper_val], \
