@@ -171,6 +171,6 @@ class ColecoView(BinaryView):
 	# undocumented but looks to match arch.address_size
 	# so should be in bytes and should equal arch.address_size
 	# but this breaks .synthetic_builtins when the rom mapping uses the whole memory
-	# so we'll leave it at 8
+	# better to have this correct and .synthetic_builtins won't help us anyway
 	def perform_get_address_size(self):
-		return 8
+		return 2
