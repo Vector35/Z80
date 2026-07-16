@@ -7,6 +7,7 @@ _Sample Z80 architecture plugin written to accompany [A Guide to Architecture Pl
 
 <p>This Z80 architecture plugin was originally written as an example architecture to introduce how to easily add support to Binary Ninja for any new architecture given an existing disassembly library. It originally used the <a href='https://skoolkit.ca/'>SchoolKit</a> python library as a disassembler, but later was updated to work with a <a href='https://github.com/lwerdna/z80dis'>dedicated library</a>.</p><p>This repository has several checkpoints from the <a href='https://binary.ninja/2020/01/08/guide-to-architecture-plugins-part1.html'>blog post</a> that are associated with specific comments.</p>
 
+![](https://raw.githubusercontent.com/Vector35/Z80/refs/heads/master/z80_image.png)
 
 ## Installation Instructions
 
