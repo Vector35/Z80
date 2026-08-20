@@ -102,6 +102,7 @@ class Z80(Architecture):
         '*': ['s', 'z', 'h', 'pv', 'n', 'c'],
         'c': ['c'],
         'z': ['z'],
+        'cszpv': ['s', 'z', 'pv', 'c'], # eg: z80's SLA/SRA/SRL
         'not_c': ['s', 'z', 'h', 'pv', 'n'] # eg: z80's DEC
     }
     semantic_class_for_flag_write_type = {

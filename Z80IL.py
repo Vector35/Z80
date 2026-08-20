@@ -263,6 +263,10 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
             return il.const(1, 0)
         if op == LowLevelILOperation.LLIL_ASR:
             return il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 0))
+        if op == LowLevelILOperation.LLIL_LSR:
+            return il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 0))
+        if op == LowLevelILOperation.LLIL_LSL:
+            return il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 7))
         if op == LowLevelILOperation.LLIL_RLC:
             return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 7))
         if op == LowLevelILOperation.LLIL_ROL:
