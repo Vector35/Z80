@@ -735,7 +735,7 @@ def gen_instr_il(addr, decoded, il):
         temp0 = LLIL_TEMP(0)
         il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [il.reg(1, 'C')]))
         # save to (HL)
-        il.append(il.store(1, il.reg(2, 'HL'), temp0))
+        il.append(il.store(1, il.reg(2, 'HL'), il.reg(1, temp0)))
         # HL = HL + 1
         il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2, 1))))
         # B = B - 1
@@ -754,7 +754,7 @@ def gen_instr_il(addr, decoded, il):
         temp0 = LLIL_TEMP(0)
         il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [il.reg(1, 'C')]))
         # save to (HL)
-        il.append(il.store(1, il.reg(2, 'HL'), temp0))
+        il.append(il.store(1, il.reg(2, 'HL'), il.reg(1, temp0)))
         # HL = HL + 1
         il.append(il.set_reg(2, 'HL', il.add(2, il.reg(2, 'HL'), il.const(2, 1))))
         # B = B - 1
@@ -770,7 +770,7 @@ def gen_instr_il(addr, decoded, il):
         temp0 = LLIL_TEMP(0)
         il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [il.reg(1, 'C')]))
         # save to (HL)
-        il.append(il.store(1, il.reg(2, 'HL'), temp0))
+        il.append(il.store(1, il.reg(2, 'HL'), il.reg(1, temp0)))
         # HL = HL - 1
         il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2, 1))))
         # B = B - 1
@@ -789,7 +789,7 @@ def gen_instr_il(addr, decoded, il):
         temp0 = LLIL_TEMP(0)
         il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [il.reg(1, 'C')]))
         # save to (HL)
-        il.append(il.store(1, il.reg(2, 'HL'), temp0))
+        il.append(il.store(1, il.reg(2, 'HL'), il.reg(1, temp0)))
         # HL = HL - 1
         il.append(il.set_reg(2, 'HL', il.sub(2, il.reg(2, 'HL'), il.const(2, 1))))
         # B = B - 1
