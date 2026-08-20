@@ -564,7 +564,7 @@ def gen_instr_il(addr, decoded, il):
         # if lower nybble > 9 OR H flag set then we diff by 0x06
         label_add_6 = LowLevelILLabel()
         label_dont_add_6 = LowLevelILLabel()
-        lower_nybble = il.xor_expr(1, il.const(1, 0x0F), il.reg(1, 'A'))
+        lower_nybble = il.and_expr(1, il.const(1, 0x0F), il.reg(1, 'A'))
         cond_gt_9 = il.compare_unsigned_greater_than(1, lower_nybble, il.const(1, 0x09))
         cond_hf_set = il.flag('h')
         cond = il.or_expr(1, cond_gt_9, cond_hf_set)
