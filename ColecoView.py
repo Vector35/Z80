@@ -26,7 +26,7 @@ class ColecoView(BinaryView):
 		# data is a binaryninja.binaryview.BinaryView
 		if len(data.read(0,0xc000)) == 0xc000:
 			if self.is_valid_cartridge_header(data.read(0x8000, 12)):
-				if data.read(0, 16) == '\x31\xb9\x73\xc3\x6e\x00\xff\xff\xc3\x0c\x80\xff\xff\xff\xff\xc3':
+				if data.read(0, 16) == b'\x31\xb9\x73\xc3\x6e\x00\xff\xff\xc3\x0c\x80\xff\xff\xff\xff\xc3':
 					print('detected ColecoVision system image')
 					return 'system'
 
