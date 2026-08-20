@@ -611,16 +611,15 @@ def gen_instr_il(addr, decoded, il):
         il.append(il.intrinsic([], "di", []))
 
     elif decoded.op == OP.DJNZ:
-        # decrement B
-        tmp = il.reg(1, 'B')
-        tmp = il.sub(1, tmp, il.const(1, 1), 'z')
-        tmp = il.set_reg(1, 'B', tmp)
-        il.append(tmp)
+        # decrement B (DJNZ does not affect any flags)
+        result = il.sub(1, il.reg(1, 'B'), il.const(1, 1))
+        il.append(il.set_reg(1, 'B', result))
         # if nonzero, jump! (the "go" is built into il.if_expr)
         label_loop = LowLevelILLabel()
         label_continue = LowLevelILLabel()
 
-        il.append(il.if_expr(il.flag('z'), label_continue, label_loop))
+        condition = il.compare_not_equal(1, il.reg(1, 'B'), il.const(1, 0))
+        il.append(il.if_expr(condition, label_loop, label_continue))
         il.mark_label(label_loop)
         il.append(il.jump(operand_to_il(oper_type, oper_val, il, 2)))
         il.mark_label(label_continue)
