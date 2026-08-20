@@ -249,15 +249,15 @@ def gen_flag_il(op, size, write_type, flag, operands, il):
         if op == LowLevelILOperation.LLIL_OR:
             return il.const(1, 0)
         if op == LowLevelILOperation.LLIL_ASR:
-            return il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 1))
+            return il.test_bit(1, expressionify(size, operands[0], il), il.const(1, 0))
         if op == LowLevelILOperation.LLIL_RLC:
-            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 0x80))
+            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 7))
         if op == LowLevelILOperation.LLIL_ROL:
-            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 0x80))
+            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 7))
         if op == LowLevelILOperation.LLIL_RRC:
-            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))
+            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 0))
         if op == LowLevelILOperation.LLIL_ROR:
-            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 1))
+            return il.test_bit(1, il.reg(size, operands[0]), il.const(1, 0))
         if op == LowLevelILOperation.LLIL_XOR:
             return il.const(1, 0)
 
@@ -678,12 +678,12 @@ def gen_instr_il(addr, decoded, il):
             ))
 
             # do flags last
-            il.append(il.set_flag('c', il.test_bit(2, il.reg(1, 'F'), il.const(1, 1))))
-            il.append(il.set_flag('h', il.test_bit(2, il.reg(1, 'F'), il.const(1, 1<<4))))
-            il.append(il.set_flag('n', il.test_bit(2, il.reg(1, 'F'), il.const(1, 1<<1))))
-            il.append(il.set_flag('pv', il.test_bit(2, il.reg(1, 'F'), il.const(1, 1<<2))))
-            il.append(il.set_flag('s', il.test_bit(2, il.reg(1, 'F'), il.const(1, 1<<7))))
-            il.append(il.set_flag('z', il.test_bit(2, il.reg(1, 'F'), il.const(1, 1<<6))))
+            il.append(il.set_flag('c', il.test_bit(1, il.reg(1, 'F'), il.const(1, 0))))
+            il.append(il.set_flag('h', il.test_bit(1, il.reg(1, 'F'), il.const(1, 4))))
+            il.append(il.set_flag('n', il.test_bit(1, il.reg(1, 'F'), il.const(1, 1))))
+            il.append(il.set_flag('pv', il.test_bit(1, il.reg(1, 'F'), il.const(1, 2))))
+            il.append(il.set_flag('s', il.test_bit(1, il.reg(1, 'F'), il.const(1, 7))))
+            il.append(il.set_flag('z', il.test_bit(1, il.reg(1, 'F'), il.const(1, 6))))
 
         else:
             # every other EX is the same
@@ -983,12 +983,12 @@ def gen_instr_il(addr, decoded, il):
                 size = 1
             ))
             temp0 = il.expr(LowLevelILOperation.LLIL_REG, LLIL_TEMP(0), 1)
-            il.append(il.set_flag('s', il.test_bit(1, temp0, il.const(1, 1<<7))))
-            il.append(il.set_flag('z', il.test_bit(1, temp0, il.const(1, 1<<6))))
-            il.append(il.set_flag('h', il.test_bit(1, temp0, il.const(1, 1<<4))))
-            il.append(il.set_flag('pv', il.test_bit(1, temp0, il.const(1, 1<<2))))
-            il.append(il.set_flag('n', il.test_bit(1, temp0, il.const(1, 1<<1))))
-            il.append(il.set_flag('c', il.test_bit(1, temp0, il.const(1, 1))))
+            il.append(il.set_flag('s', il.test_bit(1, temp0, il.const(1, 7))))
+            il.append(il.set_flag('z', il.test_bit(1, temp0, il.const(1, 6))))
+            il.append(il.set_flag('h', il.test_bit(1, temp0, il.const(1, 4))))
+            il.append(il.set_flag('pv', il.test_bit(1, temp0, il.const(1, 2))))
+            il.append(il.set_flag('n', il.test_bit(1, temp0, il.const(1, 1))))
+            il.append(il.set_flag('c', il.test_bit(1, temp0, il.const(1, 0))))
             tmp = il.pop(1)
             tmp = il.set_reg(1, 'A', tmp)
             il.append(tmp)
