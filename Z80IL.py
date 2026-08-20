@@ -186,6 +186,19 @@ def operand_to_il(oper_type, oper_val, il, size_hint=0, peel_load=False):
     else:
         raise Exception("unknown operand type: " + str(oper_type))
 
+def port_to_il(oper_type, oper_val, il):
+    """ the decoder types the (n) and (C) operands of IN/OUT as ADDR_DEREF /
+        REG_DEREF, because z80 syntax spells ports with parentheses. the in/out
+        intrinsics take the port as a value, so it must not be lifted as a load """
+    if oper_type == OPER_TYPE.ADDR_DEREF:
+        return il.const(1, oper_val)
+
+    elif oper_type == OPER_TYPE.REG_DEREF:
+        return il.reg(REG_TO_SIZE[oper_val], reg2str(oper_val))
+
+    else:
+        return operand_to_il(oper_type, oper_val, il, 1)
+
 def exchange(lhs_reg, rhs_reg, il):
     # temp0 = lhs
     il.append(il.expr(LowLevelILOperation.LLIL_SET_REG,
@@ -726,7 +739,7 @@ def gen_instr_il(addr, decoded, il):
 
     elif decoded.op == OP.IN:
         temp0 = LLIL_TEMP(0)
-        il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [operand_to_il(operb_type, operb_val, il, 1)]))
+        il.append(il.intrinsic([ILRegister(il.arch, temp0)], "in", [port_to_il(operb_type, operb_val, il)]))
         il.append(il.set_reg(1, reg2str(oper_val), il.reg(1, temp0)))
 
     elif decoded.op == OP.INI:
@@ -905,7 +918,7 @@ def gen_instr_il(addr, decoded, il):
         il.append(tmp)
 
     elif decoded.op == OP.OUT:
-        il.append(il.intrinsic([], "out", [operand_to_il(oper_type, oper_val, il, 1), operand_to_il(operb_type, operb_val, il, 1)]))
+        il.append(il.intrinsic([], "out", [port_to_il(oper_type, oper_val, il), operand_to_il(operb_type, operb_val, il, 1)]))
 
     elif decoded.op == OP.OUTD:
         # read from (HL)
