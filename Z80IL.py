@@ -493,7 +493,7 @@ def gen_instr_il(addr, decoded, il):
         # BC = BC - 1
         tmp = il.sub(2, il.reg(2, 'BC'), il.const(2, 1))
         il.append(il.set_reg(2, 'BC', tmp))
-        il.append(il.set_flag('pv', il.compare_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
+        il.append(il.set_flag('pv', il.compare_not_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
 
     elif decoded.op == OP.CPIR:
         label_loop = LowLevelILLabel()
@@ -524,7 +524,7 @@ def gen_instr_il(addr, decoded, il):
         # BC = BC - 1
         tmp = il.sub(2, il.reg(2, 'BC'), il.const(2, 1))
         il.append(il.set_reg(2, 'BC', tmp))
-        il.append(il.set_flag('pv', il.compare_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
+        il.append(il.set_flag('pv', il.compare_not_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
 
     elif decoded.op == OP.CPDR:
         label_loop = LowLevelILLabel()
