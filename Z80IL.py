@@ -510,7 +510,7 @@ def gen_instr_il(addr, decoded, il):
         tmp = il.sub(2, il.reg(2, 'BC'), il.const(2, 1))
         il.append(il.set_reg(2, 'BC', tmp))
         il.append(il.set_flag('pv', il.compare_not_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
-        il.append(il.if_expr(il.or_expr(1, il.flag('z'), il.neg_expr(1, il.flag('pv'))), label_done, label_loop))
+        il.append(il.if_expr(il.or_expr(1, il.flag('z'), il.compare_equal(2, il.reg(2, 'BC'), il.const(2, 0))), label_done, label_loop))
         il.mark_label(label_done)
 
     elif decoded.op == OP.CPD:
@@ -541,7 +541,7 @@ def gen_instr_il(addr, decoded, il):
         tmp = il.sub(2, il.reg(2, 'BC'), il.const(2, 1))
         il.append(il.set_reg(2, 'BC', tmp))
         il.append(il.set_flag('pv', il.compare_not_equal(2, il.reg(2, 'BC'), il.const(2, 0))))
-        il.append(il.if_expr(il.or_expr(1, il.flag('z'), il.neg_expr(1, il.flag('pv'))), label_done, label_loop))
+        il.append(il.if_expr(il.or_expr(1, il.flag('z'), il.compare_equal(2, il.reg(2, 'BC'), il.const(2, 0))), label_done, label_loop))
         il.mark_label(label_done)
 
     elif decoded.op == OP.CPL:
