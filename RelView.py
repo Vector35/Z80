@@ -29,7 +29,7 @@ class RelView(BinaryView):
         syms = []
         have_code = False
 
-        for line in self.parent_view.read(0, len(self.parent_view)).split(b'\x0a'):
+        for line in self.parent_view.read(0, self.parent_view.end).split(b'\x0a'):
             line = line.decode('utf-8')
 
             # AREA line -> create a section
@@ -81,3 +81,6 @@ class RelView(BinaryView):
 
     def perform_get_entry_point(self):
         return 0
+
+    def perform_get_address_size(self):
+        return 2
